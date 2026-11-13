@@ -37,8 +37,12 @@ DSHView 的做法是：**把微软官方固定版 WebView2 运行时和程序放
 仓库**只放源码**：运行时目录有 510MB，不适合进 git（GitHub 单文件上限 100MB）。构建脚本会把缺的部分补回来。
 
 ```powershell
-pwsh ./build.ps1            # 生成 build/dshview-client/
-pwsh ./build.ps1 -Zip       # 额外打成 zip
+# Windows 自带的 Windows PowerShell 5.1
+powershell -ExecutionPolicy Bypass -File .\build.ps1
+powershell -ExecutionPolicy Bypass -File .\build.ps1 -Zip
+
+# 或者 PowerShell 7+
+pwsh ./build.ps1 -Zip
 ```
 
 脚本做的事：

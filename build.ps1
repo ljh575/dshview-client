@@ -19,14 +19,20 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$OutDir = (Join-Path $PSScriptRoot 'build/dshview-client'),
+    [string]$OutDir,
     [switch]$Zip,
     # Keep the runtime cache between builds instead of re-downloading 260MB.
-    [string]$CacheDir = (Join-Path $PSScriptRoot 'build/.cache')
+    [string]$CacheDir
 )
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+
+# $PSScriptRoot is empty inside param() defaults on Windows PowerShell 5.1,
+# so the script root is resolved here instead.
+$ScriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Definition }
+if (-not $OutDir) { $OutDir = Join-Path $ScriptRoot 'build/dshview-client' }
+if (-not $CacheDir) { $CacheDir = Join-Path $ScriptRoot 'build/.cache' }
 
 $RuntimeVersion = '157.0.4341.46'
 $SdkVersion = '1.0.3967.48'
@@ -116,29 +122,29 @@ $sdkNative = Join-Path $work 'sdk/runtimes/win-x64/native'
 Copy-Item (Join-Path $sdkLib 'Microsoft.Web.WebView2.Core.dll') $OutDir -Force
 Copy-Item (Join-Path $sdkLib 'Microsoft.Web.WebView2.WinForms.dll') $OutDir -Force
 Copy-Item (Join-Path $sdkNative 'WebView2Loader.dll') $OutDir -Force
-Copy-Item (Join-Path $PSScriptRoot 'dshview.ini') $OutDir -Force
+Copy-Item (Join-Path $ScriptRoot 'dshview.ini') $OutDir -Force
 
 Write-Step 'Compiling DSHView.exe'
-$icon = Join-Path $PSScriptRoot 'src/app_dsh.ico'
+$icon = Join-Path $ScriptRoot 'src/app_dsh.ico'
 & $csc /nologo /target:winexe /platform:anycpu /optimize+ `
     /out:"$OutDir\DSHView.exe" `
-    /win32icon:"$icon" /win32manifest:"$PSScriptRoot\src\app.manifest" `
+    /win32icon:"$icon" /win32manifest:"$ScriptRoot\src\app.manifest" `
     /resource:"$icon",app_dsh.ico `
-    /resource:"$PSScriptRoot\src\app_black.ico",app_black.ico `
-    /resource:"$PSScriptRoot\src\app_white.ico",app_white.ico `
+    /resource:"$ScriptRoot\src\app_black.ico",app_black.ico `
+    /resource:"$ScriptRoot\src\app_white.ico",app_white.ico `
     /r:"$OutDir\Microsoft.Web.WebView2.Core.dll" `
     /r:"$OutDir\Microsoft.Web.WebView2.WinForms.dll" `
     /r:System.dll /r:System.Core.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll `
-    "$PSScriptRoot\src\Program.cs"
+    "$ScriptRoot\src\Program.cs"
 if ($LASTEXITCODE -ne 0) { throw "csc failed with exit code $LASTEXITCODE" }
 
-Copy-Item (Join-Path $PSScriptRoot 'README.md') $OutDir -Force
+Copy-Item (Join-Path $ScriptRoot 'README.md') $OutDir -Force
 
 $size = (Get-ChildItem $OutDir -Recurse -File | Measure-Object Length -Sum).Sum / 1MB
 Write-Step ("Ready: {0} ({1:N0} MB)" -f $OutDir, $size)
 
 if ($Zip) {
-    $zipPath = Join-Path $PSScriptRoot 'build/dshview-client-win64.zip'
+    $zipPath = Join-Path $ScriptRoot 'build/dshview-client-win64.zip'
     Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
     & tar.exe -a -c -f $zipPath -C $OutDir . 2>$null
     Write-Step ("Zipped: {0} ({1:N0} MB)" -f $zipPath, ((Get-Item $zipPath).Length / 1MB))
