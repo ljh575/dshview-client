@@ -2,6 +2,8 @@
 
 > 一个 ~1MB 的绿色窗口程序，自带固定版 WebView2 运行时，让**没有 WebView2、不能装软件、内存紧张的内网 Windows 机器**也能用上 [DeepSeek Harness](https://github.com/deepseek-ai) 的 Web GUI。
 
+[English](README.en.md) | 中文
+
 ![图标](docs/icons.png)
 
 ## 为什么需要它

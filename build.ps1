@@ -139,6 +139,8 @@ $icon = Join-Path $ScriptRoot 'src/app_dsh.ico'
 if ($LASTEXITCODE -ne 0) { throw "csc failed with exit code $LASTEXITCODE" }
 
 Copy-Item (Join-Path $ScriptRoot 'README.md') $OutDir -Force
+if (Test-Path (Join-Path $ScriptRoot 'README.en.md')) { Copy-Item (Join-Path $ScriptRoot 'README.en.md') $OutDir -Force }
+if (Test-Path (Join-Path $ScriptRoot 'LICENSE')) { Copy-Item (Join-Path $ScriptRoot 'LICENSE') $OutDir -Force }
 
 $size = (Get-ChildItem $OutDir -Recurse -File | Measure-Object Length -Sum).Sum / 1MB
 Write-Step ("Ready: {0} ({1:N0} MB)" -f $OutDir, $size)
