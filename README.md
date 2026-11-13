@@ -4,8 +4,6 @@
 
 [English](README.en.md) | 中文
 
-![图标](docs/icons.png)
-
 ## 为什么需要它
 
 DeepSeek Harness 的 Web GUI 需要 Chromium 内核。典型的内网场景却很尴尬：
@@ -77,14 +75,14 @@ pwsh ./build.ps1 -Zip
 
 ## 图标
 
-`icon` 四档：
+`icon` 四档。下表每行的图都是**同一选项在浅色底（左）与深色底（右）的实际效果**：
 
-| 值 | 用的图 | 说明 |
+| 值 | 浅底 / 深底 | 说明 |
 |---|---|---|
-| `default` | DSH 官方图标（圆角底 + 鲸鱼） | 默认，浅底深底都能看清 |
-| `auto` | 跟随系统主题：浅色黑鲸、深色白鲸 | 读 `AppsUseLightTheme` |
-| `light` | 始终黑鲸 | 标题栏是浅色时用 |
-| `dark` | 始终白鲸 | 标题栏是深色时用 |
+| `default` | ![default](docs/ic-default.png) | DSH 官方图标（圆角底 + 鲸鱼），默认值。自带浅色底，两种背景都看得清 |
+| `auto` | ![auto](docs/ic-auto.png) | 跟随系统主题：浅色用黑鲸、深色用白鲸，读 `AppsUseLightTheme` |
+| `light` | ![light](docs/ic-light.png) | 始终黑鲸。适合浅色标题栏；深色标题栏下会看不清 |
+| `dark` | ![dark](docs/ic-dark.png) | 始终白鲸。适合深色标题栏；浅色标题栏下会看不清 |
 
 exe 的**静态文件图标**固定是 `default`（资源管理器里看得到）；只有窗口/任务栏图标按设置切换。
 
@@ -145,7 +143,7 @@ src/Icon*.cs          图标生成/合成工具（生成 ico 用的，不参与�
 src/IcoExtract.cs     从 PE 里原样导出 RT_GROUP_ICON
 build.ps1             一键构建
 dshview.ini           配置模板
-docs/icons.png        图标效果图
+docs/ic-*.png        图标在浅底/深底下的效果图（README 表格用）
 ```
 
 ## 说明

@@ -4,8 +4,6 @@
 
 English | [中文](README.md)
 
-![Icons](docs/icons.png)
-
 ## Why this exists
 
 The DeepSeek Harness web GUI needs a Chromium engine. The typical intranet situation is awkward:
@@ -77,12 +75,14 @@ The file is recreated automatically when missing.
 
 ## Icons
 
-| Value | Artwork | Notes |
+Four values for `icon`. Each row shows the same setting rendered **on a light background (left) and a dark one (right)**:
+
+| Value | Light / dark | Notes |
 |---|---|---|
-| `default` | Official DSH icon (rounded backdrop + whale) | default; readable on light and dark frames |
-| `auto` | Follows the system theme: dark whale on light, white whale on dark | reads `AppsUseLightTheme` |
-| `light` | Always the dark whale | for a light title bar |
-| `dark` | Always the white whale | for a dark title bar |
+| `default` | ![default](docs/ic-default.png) | Official DSH artwork (rounded backdrop + whale), the default. Carries its own light backdrop, so it reads on both backgrounds |
+| `auto` | ![auto](docs/ic-auto.png) | Follows the system theme: dark whale on light, white whale on dark; reads `AppsUseLightTheme` |
+| `light` | ![light](docs/ic-light.png) | Always the dark whale. Good on a light title bar; hard to see on a dark one |
+| `dark` | ![dark](docs/ic-dark.png) | Always the white whale. Good on a dark title bar; hard to see on a light one |
 
 The **static file icon** of the exe is always `default` (what Explorer shows); only the window and taskbar icon follow the setting.
 
@@ -143,7 +143,7 @@ src/Icon*.cs          icon generation helpers (not part of the main build)
 src/IcoExtract.cs     extracts RT_GROUP_ICON from a PE verbatim
 build.ps1             one-command build
 dshview.ini           configuration template
-docs/icons.png        icon preview
+docs/ic-*.png        icons on light/dark backgrounds (used by the README table)
 ```
 
 ## Notes

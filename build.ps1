@@ -185,6 +185,8 @@ Copy-Item (Join-Path $ScriptRoot 'dshview.ini') $OutDir -Force
 Copy-Item (Join-Path $ScriptRoot 'README.md') $OutDir -Force
 if (Test-Path (Join-Path $ScriptRoot 'README.en.md')) { Copy-Item (Join-Path $ScriptRoot 'README.en.md') $OutDir -Force }
 if (Test-Path (Join-Path $ScriptRoot 'LICENSE')) { Copy-Item (Join-Path $ScriptRoot 'LICENSE') $OutDir -Force }
+# The README embeds docs/ic-*.png, so the images travel with it.
+if (Test-Path (Join-Path $ScriptRoot 'docs')) { Copy-Item (Join-Path $ScriptRoot 'docs') (Join-Path $OutDir 'docs') -Recurse -Force }
 
 Write-Step 'Compiling DSHView.exe'
 $icon = Join-Path $ScriptRoot 'src/app_dsh.ico'
