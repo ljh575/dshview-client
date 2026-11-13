@@ -148,4 +148,8 @@ docs/icons.png        图标效果图
 
 - 图标取自 DSH 官方安装目录的 `resources/icon.png` 与 DSH-Portable 的图标资源，仅作本工具识别用途
 - 本项目与 DeepSeek 官方无关
-- 尚未添加开源许可证，如需使用请先与作者联系或自行补充
+- 预编译包见 [Releases](https://github.com/ljh575/dshview-client/releases)
+
+## License
+
+[MIT](LICENSE)
