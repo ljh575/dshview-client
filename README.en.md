@@ -47,6 +47,8 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Zip
 pwsh ./build.ps1 -Zip
 ```
 
+**Incremental by default**: when the output folder already holds a complete runtime plus the three SDK assemblies, the 248MB download and the 510MB copy are skipped and only the executable is recompiled (~1 second). `-Force` re-assembles the runtime but still reuses the packages in `build/.cache` instead of downloading them again. The first build needs network access; after that it rebuilds offline as long as the cache or the output folder survives.
+
 What it does:
 
 1. Downloads `WebView2.Runtime.X64` and `WebView2.Runtime.X64.Core` (which carries `msedge.dll`) from NuGet and merges them into `webview2/`

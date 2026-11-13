@@ -47,6 +47,8 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Zip
 pwsh ./build.ps1 -Zip
 ```
 
+**增量构建**：输出目录里已有完整运行时和三个 SDK 程序集时，会跳过 248MB 下载与 510MB 拷贝，只重新编译 exe（约 1 秒）。加 `-Force` 则重新组装运行时（`build/.cache` 里的包仍然复用，不会重新下载）。首次构建必须联网；之后只要缓存或输出目录还在，离线也能重建。
+
 脚本做的事：
 
 1. 从 NuGet 下载 `WebView2.Runtime.X64` 与 `WebView2.Runtime.X64.Core`（含 `msedge.dll`），合并成 `webview2/`
