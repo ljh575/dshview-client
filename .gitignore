@@ -1,0 +1,20 @@
+# 构建产物（运行时 510MB，不进仓库）
+build/
+
+# 自带运行时（由 build.ps1 下载合并）
+webview2/
+*.nupkg
+*.dshpack
+
+# 运行期数据
+profile/
+*.log
+*.state
+selftest-result.json
+dshview-client-win64.zip
+
+# 编辑器
+.vs/
+.idea/
+*.user
+*.suo
