@@ -22,6 +22,7 @@ DSHView's approach: **put Microsoft's official fixed-version WebView2 runtime in
 - **Low memory**: GPU and background networking are disabled; ~129MB private memory on an empty page
 - **Clipboard works**: intranet http origins are promoted to a secure context, so `navigator.clipboard` behaves
 - **Four icon modes**: official artwork / follow system theme / fixed dark whale / fixed white whale
+- **Closes to the tray**: the window leaves the taskbar and the DSH session keeps running (`closetotray=0` disables it)
 - **Self-diagnosing**: log file, self-test mode, and a startup failure dialog that names the file to edit
 
 ## Quick start
@@ -68,6 +69,7 @@ No Visual Studio, no .NET SDK, no NuGet client required. The build machine needs
 | `zoom` | `1.0` | initial zoom |
 | `toolbar` | `0` | `1` shows the address bar, back/forward and zoom |
 | `icon` | `default` | `default` / `auto` / `light` / `dark` |
+| `closetotray` | `1` | close hides to the tray (`0` = quit on close) |
 | `args` | empty | extra Chromium flags |
 | `secureorigin` | `1` | promote http intranet origins to a secure context (needed for clipboard) |
 
@@ -85,6 +87,14 @@ Four values for `icon`. Each row shows the same setting rendered **on a light ba
 | `dark` | ![dark](docs/ic-dark.png) | Always the white whale. Good on a dark title bar; hard to see on a light one |
 
 The **static file icon** of the exe is always `default` (what Explorer shows); only the window and taskbar icon follow the setting.
+
+## Closing and the tray
+
+Closing the window does **not** quit by default: it minimizes to the notification area. The window disappears from the taskbar (it holds no taskbar slot), the process keeps running, and the DSH session is not interrupted.
+
+- Double-click the tray icon → restore the window (keeping its maximized/normal state)
+- Right-click the tray icon → *Show window* / *Quit*
+- To get the traditional "close means exit" behavior back: `closetotray=0`
 
 ## About tokens
 

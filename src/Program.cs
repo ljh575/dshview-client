@@ -35,6 +35,7 @@ namespace DshView
         public bool SecureOrigin = true;      // promote a plain-http LAN origin to a secure context
         public bool Toolbar = false;          // DSH-Portable style: content only, no chrome
         public string Icon = "default";       // default | auto | light | dark
+        public bool CloseToTray = true;       // close button hides to the notification area
         public bool SelfTest = false;
         public bool Bare = false;             // diagnostics: no default browser flags
 
@@ -65,6 +66,7 @@ namespace DshView
                             case "args": s.ExtraArgs = val; break;
                             case "toolbar": s.Toolbar = IsTrue(val); break;
                             case "icon": s.Icon = val; break;
+                            case "closetotray": s.CloseToTray = IsTrue(val); break;
                             case "secureorigin": s.SecureOrigin = IsTrue(val); break;
                         }
                     }
@@ -182,6 +184,13 @@ namespace DshView
                 sb.AppendLine("#   dark    = always the white whale (for a dark title bar)");
                 sb.AppendLine("#             始终白鲸，适合深色标题栏");
                 sb.AppendLine("icon=default");
+                sb.AppendLine();
+                sb.AppendLine("# Close button: 1 = minimize to the notification area (default; the window");
+                sb.AppendLine("# leaves the taskbar, double-click the tray icon to restore, right-click to quit),");
+                sb.AppendLine("# 0 = quit the application immediately.");
+                sb.AppendLine("# 关闭按钮：1 = 最小化到托盘（默认，任务栏不再显示，双击托盘图标恢复，右键退出），");
+                sb.AppendLine("#           0 = 直接退出程序。");
+                sb.AppendLine("closetotray=1");
                 sb.AppendLine();
                 sb.AppendLine("# Extra Chromium flags, space separated. Leave empty normally.");
                 sb.AppendLine("# 追加给内核的参数，空格分隔，通常留空。");
@@ -337,6 +346,10 @@ namespace DshView
         private System.Windows.Forms.Timer _selfTestTimer;
         private bool _finished;
         private bool _failureShown;
+        private NotifyIcon _tray;
+        private bool _exiting;
+        private FormWindowState _stateBeforeHide = FormWindowState.Normal;
+        private bool _trayHintShown;
 
         public MainForm(Settings settings)
         {
@@ -348,6 +361,7 @@ namespace DshView
             try { Icon = App.PickThemeIcon(_s.Icon); }
             catch { }
             LoadLayout();
+            if (_s.CloseToTray && !_s.SelfTest) SetupTray();
 
             if (_s.Toolbar) BuildToolbar();
 
@@ -365,7 +379,7 @@ namespace DshView
                 BeginInvoke((MethodInvoker)delegate { BeginInit(); });
             };
 
-            FormClosing += delegate { SaveLayout(); };
+            FormClosing += OnFormClosing;
             KeyPreview = true;
             KeyDown += OnKeyDown;
         }
@@ -423,6 +437,93 @@ namespace DshView
             _bar.Controls.Add(_zoomIn);
             _bar.Controls.Add(_menu);
             _bar.Resize += delegate { LayoutBar(_bar); };
+        }
+
+        // The tray icon keeps the process alive with no window and no taskbar
+        // button (a hidden top-level window drops out of the taskbar by itself,
+        // so ShowInTaskbar is left alone -- toggling it would recreate the HWND
+        // and tear down the WebView2 controller).
+        private void SetupTray()
+        {
+            _tray = new NotifyIcon();
+            try { _tray.Icon = App.PickThemeIcon(_s.Icon); }
+            catch { _tray.Icon = SystemIcons.Application; }
+            _tray.Text = "DeepSeek Harness";
+            _tray.Visible = true;
+
+            ContextMenuStrip menu = new ContextMenuStrip();
+            menu.Items.Add("显示窗口", null, delegate { RestoreFromTray(); });
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("退出", null, delegate { ExitFromTray(); });
+            _tray.ContextMenuStrip = menu;
+            _tray.DoubleClick += delegate { RestoreFromTray(); };
+            App.Log("tray icon created");
+        }
+
+        private void HideToTray()
+        {
+            if (_tray == null) SetupTray();
+            SaveLayout();
+            _stateBeforeHide = WindowState;
+            Hide();
+            App.Log("hidden to tray");
+
+            if (!_trayHintShown)
+            {
+                _trayHintShown = true;
+                try
+                {
+                    _tray.BalloonTipTitle = "DeepSeek Harness";
+                    _tray.BalloonTipText = "已最小化到托盘。双击图标可恢复，右键菜单可退出。";
+                    _tray.ShowBalloonTip(4000);
+                }
+                catch { }
+            }
+        }
+
+        private void RestoreFromTray()
+        {
+            Show();
+            if (_stateBeforeHide == FormWindowState.Maximized) WindowState = FormWindowState.Maximized;
+            else if (_stateBeforeHide == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
+            Activate();
+            BringToFront();
+            App.Log("restored from tray");
+        }
+
+        private void ExitFromTray()
+        {
+            _exiting = true;
+            App.Log("exit requested from tray");
+            if (_tray != null)
+            {
+                _tray.Visible = false;
+                _tray.Dispose();
+                _tray = null;
+            }
+            Close();
+            Application.Exit();
+        }
+
+        private void OnFormClosing(object sender, FormClosingEventArgs e)
+        {
+            SaveLayout();
+
+            bool userClosed = e.CloseReason == CloseReason.UserClosing || e.CloseReason == CloseReason.ApplicationExitCall;
+            if (!_exiting && _s.CloseToTray && e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                HideToTray();
+                return;
+            }
+
+            if (_tray != null)
+            {
+                _tray.Visible = false;
+                _tray.Dispose();
+                _tray = null;
+            }
+            if (!userClosed) App.Log("closing: " + e.CloseReason);
         }
 
         private Button MakeButton(string text, string tip)
@@ -813,9 +914,17 @@ namespace DshView
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing && _view != null)
+            if (disposing)
             {
-                try { _view.Dispose(); } catch { }
+                if (_tray != null)
+                {
+                    try { _tray.Visible = false; _tray.Dispose(); } catch { }
+                    _tray = null;
+                }
+                if (_view != null)
+                {
+                    try { _view.Dispose(); } catch { }
+                }
             }
             base.Dispose(disposing);
         }
