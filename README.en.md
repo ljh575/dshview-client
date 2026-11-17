@@ -22,7 +22,7 @@ DSHView's approach: **put Microsoft's official fixed-version WebView2 runtime in
 - **Low memory**: GPU and background networking are disabled; ~129MB private memory on an empty page
 - **Clipboard works**: intranet http origins are promoted to a secure context, so `navigator.clipboard` behaves
 - **Four icon modes**: official artwork / follow system theme / fixed dark whale / fixed white whale
-- **Closes to the tray**: the window leaves the taskbar and the DSH session keeps running (`closetotray=0` disables it)
+- **Asks before closing**: closing prompts you to pick "minimize to the tray" (the session survives) or "quit"; `closetotray=1` skips the question and always minimizes
 - **Self-diagnosing**: log file, self-test mode, and a startup failure dialog that names the file to edit
 
 ## Quick start
@@ -69,7 +69,7 @@ No Visual Studio, no .NET SDK, no NuGet client required. The build machine needs
 | `zoom` | `1.0` | initial zoom |
 | `toolbar` | `0` | `1` shows the address bar, back/forward and zoom |
 | `icon` | `default` | `default` / `auto` / `light` / `dark` |
-| `closetotray` | `1` | close hides to the tray (`0` = quit on close) |
+| `closetotray` | `0` | `0` asks on close: minimize to the tray or quit; `1` = always minimize to the tray |
 | `args` | empty | extra Chromium flags |
 | `secureorigin` | `1` | promote http intranet origins to a secure context (needed for clipboard) |
 
@@ -90,11 +90,14 @@ The **static file icon** of the exe is always `default` (what Explorer shows); o
 
 ## Closing and the tray
 
-Closing the window does **not** quit by default: it minimizes to the notification area. The window disappears from the taskbar (it holds no taskbar slot), the process keeps running, and the DSH session is not interrupted.
+With the default `closetotray=0`, closing the window **asks first**: minimize to the notification area, or quit. That way a stray click on the × cannot end a session you were reading.
 
+- *Minimize to the tray*: the window leaves the taskbar (it holds no taskbar slot), the process keeps running, and the DSH session is not interrupted
+- *Quit*: the application exits
+- The dialog's ×, `Esc`, or *Cancel*: nothing happens, the window stays open
+- To stop asking and always minimize silently: set `closetotray=1`
 - Double-click the tray icon → restore the window (keeping its maximized/normal state)
 - Right-click the tray icon → *Show window* / *Quit*
-- To get the traditional "close means exit" behavior back: `closetotray=0`
 
 ## About tokens
 

@@ -35,7 +35,7 @@ namespace DshView
         public bool SecureOrigin = true;      // promote a plain-http LAN origin to a secure context
         public bool Toolbar = false;          // DSH-Portable style: content only, no chrome
         public string Icon = "default";       // default | auto | light | dark
-        public bool CloseToTray = true;       // close button hides to the notification area
+        public bool CloseToTray = false;      // false (default) = ask on close; true = always hide to tray
         public bool SelfTest = false;
         public bool Bare = false;             // diagnostics: no default browser flags
 
@@ -185,12 +185,13 @@ namespace DshView
                 sb.AppendLine("#             始终白鲸，适合深色标题栏");
                 sb.AppendLine("icon=default");
                 sb.AppendLine();
-                sb.AppendLine("# Close button: 1 = minimize to the notification area (default; the window");
-                sb.AppendLine("# leaves the taskbar, double-click the tray icon to restore, right-click to quit),");
-                sb.AppendLine("# 0 = quit the application immediately.");
-                sb.AppendLine("# 关闭按钮：1 = 最小化到托盘（默认，任务栏不再显示，双击托盘图标恢复，右键退出），");
-                sb.AppendLine("#           0 = 直接退出程序。");
-                sb.AppendLine("closetotray=1");
+                sb.AppendLine("# Close button: 0 = ask what to do (default) -- minimize to the notification");
+                sb.AppendLine("# area or quit; 1 = always minimize to the notification area without asking.");
+                sb.AppendLine("# Either way the window leaves the taskbar, double-click the tray icon to");
+                sb.AppendLine("# restore it, right-click for a menu with Show / Quit.");
+                sb.AppendLine("# 关闭按钮：0 = 点关闭弹出询问框（最小化到托盘 / 直接退出，默认）；");
+                sb.AppendLine("#           1 = 直接最小化到托盘，不再询问。");
+                sb.AppendLine("closetotray=0");
                 sb.AppendLine();
                 sb.AppendLine("# Extra Chromium flags, space separated. Leave empty normally.");
                 sb.AppendLine("# 追加给内核的参数，空格分隔，通常留空。");
@@ -350,6 +351,7 @@ namespace DshView
         private bool _exiting;
         private FormWindowState _stateBeforeHide = FormWindowState.Normal;
         private bool _trayHintShown;
+        private bool _closePromptOpen;
 
         public MainForm(Settings settings)
         {
@@ -510,10 +512,25 @@ namespace DshView
             SaveLayout();
 
             bool userClosed = e.CloseReason == CloseReason.UserClosing || e.CloseReason == CloseReason.ApplicationExitCall;
-            if (!_exiting && _s.CloseToTray && e.CloseReason == CloseReason.UserClosing)
+            if (!_exiting && e.CloseReason == CloseReason.UserClosing)
             {
+                if (_s.CloseToTray)
+                {
+                    e.Cancel = true;
+                    HideToTray();
+                    return;
+                }
+
+                // closetotray=0 asks instead of quitting. The prompt is posted to
+                // the message loop rather than opened here: running a modal dialog
+                // from inside the closing handler would block a form that is
+                // already tearing down.
                 e.Cancel = true;
-                HideToTray();
+                if (!_closePromptOpen)
+                {
+                    _closePromptOpen = true;
+                    BeginInvoke((MethodInvoker)delegate { AskCloseChoice(); });
+                }
                 return;
             }
 
@@ -524,6 +541,38 @@ namespace DshView
                 _tray = null;
             }
             if (!userClosed) App.Log("closing: " + e.CloseReason);
+        }
+
+        // Asks what this close should do. Only an explicit "直接退出" ends the
+        // process; the dialog's X, Esc and 取消 all leave the window open.
+        private void AskCloseChoice()
+        {
+            try
+            {
+                DialogResult choice;
+                using (CloseDialog dlg = new CloseDialog())
+                {
+                    choice = dlg.ShowDialog(this);
+                }
+                App.Log("close prompt: " + choice);
+
+                if (choice == DialogResult.Yes)
+                {
+                    HideToTray();
+                    return;
+                }
+                if (choice == DialogResult.No)
+                {
+                    App.Log("exit requested from close prompt");
+                    _exiting = true;
+                    Close();
+                    Application.Exit();
+                }
+            }
+            finally
+            {
+                _closePromptOpen = false;
+            }
         }
 
         private Button MakeButton(string text, string tip)

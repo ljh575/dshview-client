@@ -214,6 +214,7 @@ $cscArgs = @(
     '/r:System.Windows.Forms.dll',
     '/r:System.Drawing.dll',
     ('"' + (Join-Path $ScriptRoot 'src/Program.cs') + '"'),
+    ('"' + (Join-Path $ScriptRoot 'src/CloseDialog.cs') + '"'),
     ('"' + (Join-Path $ScriptRoot 'src/AssemblyInfo.cs') + '"')
 )
 Set-Content -LiteralPath $rsp -Value $cscArgs -Encoding ASCII
