@@ -35,9 +35,13 @@ namespace DshView
         public bool SecureOrigin = true;      // promote a plain-http LAN origin to a secure context
         public bool Toolbar = false;          // DSH-Portable style: content only, no chrome
         public string Icon = "default";       // default | auto | light | dark
-        public bool CloseToTray = false;      // false (default) = ask on close; true = always hide to tray
+        public string UiLang = "auto";        // auto (follow dsh web) | zh | en
+        public bool CloseToTray = false;      // legacy: closetotray=, folded into CloseAction by Parse
+        public string CloseAction = "ask";    // ask (prompt) | tray (hide) | quit (exit)
         public bool SelfTest = false;
         public bool Bare = false;             // diagnostics: no default browser flags
+        private bool _legacyTraySeen;         // closetotray was present in the ini
+        private bool _closeActionSeen;        // closeaction was given explicitly
 
         public static Settings Parse(string[] args)
         {
@@ -66,7 +70,9 @@ namespace DshView
                             case "args": s.ExtraArgs = val; break;
                             case "toolbar": s.Toolbar = IsTrue(val); break;
                             case "icon": s.Icon = val; break;
-                            case "closetotray": s.CloseToTray = IsTrue(val); break;
+                            case "lang": s.UiLang = NormalizeLang(val); break;
+                            case "closetotray": s.CloseToTray = IsTrue(val); s._legacyTraySeen = true; break;
+                            case "closeaction": s.CloseAction = NormalizeCloseAction(val); s._closeActionSeen = true; break;
                             case "secureorigin": s.SecureOrigin = IsTrue(val); break;
                         }
                     }
@@ -80,15 +86,38 @@ namespace DshView
                     if (a == "--selftest") { s.SelfTest = true; continue; }
                     if (a == "--bare") { s.Bare = true; continue; }
                     if (a == "--toolbar") { s.Toolbar = true; continue; }
+                    if (a == "--closetotray") { s.CloseToTray = true; s._legacyTraySeen = true; continue; }
+                    if (a.StartsWith("--closeaction=")) { s.CloseAction = NormalizeCloseAction(a.Substring(14)); s._closeActionSeen = true; continue; }
+                    if (a.StartsWith("--closetotray=")) { s.CloseToTray = IsTrue(a.Substring(14)); s._legacyTraySeen = true; continue; }
                     if (a.StartsWith("--url=")) s.Url = a.Substring(6);
                     else if (a.StartsWith("--runtime=")) s.Runtime = a.Substring(10);
                     else if (a.StartsWith("--data=")) s.Data = a.Substring(7);
                     else if (a.StartsWith("--zoom=")) s.Zoom = ParseDouble(a.Substring(7), 1.0);
                     else if (a.StartsWith("--args=")) s.ExtraArgs = a.Substring(7);
                     else if (a.StartsWith("--icon=")) s.Icon = a.Substring(7);
+                    else if (a.StartsWith("--lang=")) s.UiLang = NormalizeLang(a.Substring(7));
                 }
             }
+            // closeaction wins when it is written down. Otherwise an older
+            // closetotray=1 keeps its meaning, and its absence means "ask".
+            if (!s._closeActionSeen && s._legacyTraySeen && s.CloseToTray) s.CloseAction = "tray";
             return s;
+        }
+
+        // Anything unrecognised falls back to asking: never silently quit.
+        private static string NormalizeCloseAction(string v)
+        {
+            v = (v ?? "").Trim().ToLowerInvariant();
+            if (v == "tray" || v == "quit" || v == "ask") return v;
+            return "ask";
+        }
+
+        // auto = follow the dsh web UI; anything else pins a language.
+        private static string NormalizeLang(string v)
+        {
+            v = (v ?? "").Trim().ToLowerInvariant();
+            if (v == "zh" || v == "en" || v == "auto") return v;
+            return "auto";
         }
 
         private static bool IsTrue(string v)
@@ -185,13 +214,24 @@ namespace DshView
                 sb.AppendLine("#             始终白鲸，适合深色标题栏");
                 sb.AppendLine("icon=default");
                 sb.AppendLine();
-                sb.AppendLine("# Close button: 0 = ask what to do (default) -- minimize to the notification");
-                sb.AppendLine("# area or quit; 1 = always minimize to the notification area without asking.");
-                sb.AppendLine("# Either way the window leaves the taskbar, double-click the tray icon to");
-                sb.AppendLine("# restore it, right-click for a menu with Show / Quit.");
-                sb.AppendLine("# 关闭按钮：0 = 点关闭弹出询问框（最小化到托盘 / 直接退出，默认）；");
-                sb.AppendLine("#           1 = 直接最小化到托盘，不再询问。");
-                sb.AppendLine("closetotray=0");
+                sb.AppendLine("# UI language of DSHView's own menus and dialogs / 本程序菜单与对话框的语言:");
+                sb.AppendLine("#   auto = follow the dsh web UI (reads the page's html lang) / 跟随 dsh web 的语言");
+                sb.AppendLine("#   zh   = always Chinese / 始终中文");
+                sb.AppendLine("#   en   = always English / 始终英文");
+                sb.AppendLine("lang=auto");
+                sb.AppendLine();
+                sb.AppendLine("# Close button: ask | tray | quit");
+                sb.AppendLine("#   ask  = prompt every time (default); the prompt has a \"remember my");
+                sb.AppendLine("#          choice\" box that writes this key for you");
+                sb.AppendLine("#   tray = always minimize to the notification area (the DSH session keeps");
+                sb.AppendLine("#          running; double-click the tray icon to restore, right-click to quit)");
+                sb.AppendLine("#   quit = always exit");
+                sb.AppendLine("# 关闭按钮：ask = 每次询问（默认，询问框里有「记住我的选择」会改写本键）；");
+                sb.AppendLine("#           tray = 直接最小化到托盘（会话不中断，双击托盘图标恢复）；");
+                sb.AppendLine("#           quit = 直接退出。");
+                sb.AppendLine("# Older files may have closetotray=1/0 instead; it still applies when this");
+                sb.AppendLine("# key is absent. / 旧配置里的 closetotray=1/0 在本键缺失时仍然生效。");
+                sb.AppendLine("closeaction=ask");
                 sb.AppendLine();
                 sb.AppendLine("# Extra Chromium flags, space separated. Leave empty normally.");
                 sb.AppendLine("# 追加给内核的参数，空格分隔，通常留空。");
@@ -342,7 +382,7 @@ namespace DshView
         private WebView2 _view;
         private Panel _bar;
         private TextBox _address;
-        private Button _back, _forward, _reload, _home, _zoomOut, _zoomIn, _menu;
+        private Button _back, _forward, _reload, _home, _zoomOut, _zoomIn, _gear, _menu;
         private Label _zoomLabel;
         private System.Windows.Forms.Timer _selfTestTimer;
         private bool _finished;
@@ -356,14 +396,19 @@ namespace DshView
         public MainForm(Settings settings)
         {
             _s = settings;
-            Text = "DeepSeek Harness";
+            Text = "DSHView";
+            // auto follows the page and starts on the built-in default until the
+            // first successful load tells us better.
+            Lang.Current = (_s.UiLang == "zh" || _s.UiLang == "en") ? _s.UiLang : "zh";
             StartPosition = FormStartPosition.CenterScreen;
             Size = new Size(1180, 820);
             MinimumSize = new Size(560, 420);
             try { Icon = App.PickThemeIcon(_s.Icon); }
             catch { }
             LoadLayout();
-            if (_s.CloseToTray && !_s.SelfTest) SetupTray();
+            // The tray is created even when closing quits outright: with toolbar=0
+            // it is the only surface for settings/about, so it must always exist.
+            if (!_s.SelfTest) SetupTray();
 
             if (_s.Toolbar) BuildToolbar();
 
@@ -394,13 +439,14 @@ namespace DshView
             _bar.BackColor = Color.FromArgb(246, 247, 249);
             Controls.Add(_bar);
 
-            _back = MakeButton("\u2190", "后退 (Alt+左)");
-            _forward = MakeButton("\u2192", "前进 (Alt+右)");
-            _reload = MakeButton("\u27F3", "刷新 (F5)");
-            _home = MakeButton("\u2302", "回到起始地址");
-            _zoomOut = MakeButton("\u2212", "缩小 (Ctrl+-)");
-            _zoomIn = MakeButton("+", "放大 (Ctrl++)");
-            _menu = MakeButton("\u22EF", "更多");
+            _back = MakeButton("\u2190", Lang.T("toolbar.back"));
+            _forward = MakeButton("\u2192", Lang.T("toolbar.forward"));
+            _reload = MakeButton("\u27F3", Lang.T("toolbar.reload"));
+            _home = MakeButton("\u2302", Lang.T("toolbar.home"));
+            _zoomOut = MakeButton("\u2212", Lang.T("toolbar.zoomout"));
+            _zoomIn = MakeButton("+", Lang.T("toolbar.zoomin"));
+            _gear = MakeButton("\u2699", Lang.T("tray.settings"));
+            _menu = MakeButton("\u22EF", Lang.T("toolbar.more"));
 
             _back.Click += delegate { GoBack(); };
             _forward.Click += delegate { GoForward(); };
@@ -408,6 +454,7 @@ namespace DshView
             _home.Click += delegate { Navigate(_s.Url); };
             _zoomOut.Click += delegate { SetZoom(-0.1); };
             _zoomIn.Click += delegate { SetZoom(0.1); };
+            _gear.Click += delegate { OpenSettings(); };
             _menu.Click += delegate(object sender, EventArgs e) { ShowMenu(_menu); };
 
             _address = new TextBox();
@@ -437,6 +484,7 @@ namespace DshView
             _bar.Controls.Add(_zoomOut);
             _bar.Controls.Add(_zoomLabel);
             _bar.Controls.Add(_zoomIn);
+            _bar.Controls.Add(_gear);
             _bar.Controls.Add(_menu);
             _bar.Resize += delegate { LayoutBar(_bar); };
         }
@@ -445,21 +493,40 @@ namespace DshView
         // button (a hidden top-level window drops out of the taskbar by itself,
         // so ShowInTaskbar is left alone -- toggling it would recreate the HWND
         // and tear down the WebView2 controller).
+        //
+        // It is also the only menu surface when toolbar=0, so it carries the
+        // settings/about entries and the items that used to live in the ...
+        // menu. Rebuilt whenever the UI language changes.
         private void SetupTray()
         {
             _tray = new NotifyIcon();
             try { _tray.Icon = App.PickThemeIcon(_s.Icon); }
             catch { _tray.Icon = SystemIcons.Application; }
-            _tray.Text = "DeepSeek Harness";
+            _tray.Text = Lang.T("app.name");
             _tray.Visible = true;
-
-            ContextMenuStrip menu = new ContextMenuStrip();
-            menu.Items.Add("显示窗口", null, delegate { RestoreFromTray(); });
-            menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("退出", null, delegate { ExitFromTray(); });
-            _tray.ContextMenuStrip = menu;
             _tray.DoubleClick += delegate { RestoreFromTray(); };
+            BuildTrayMenu();
             App.Log("tray icon created");
+        }
+
+        private void BuildTrayMenu()
+        {
+            if (_tray == null) return;
+            ContextMenuStrip menu = new ContextMenuStrip();
+            menu.Items.Add(Lang.T("tray.show"), null, delegate { RestoreFromTray(); });
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(Lang.T("tray.settings"), null, delegate { OpenSettings(); });
+            menu.Items.Add(Lang.T("tray.about"), null, delegate { OpenAbout(); });
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(Lang.T("tray.copyurl"), null, delegate { try { Clipboard.SetText(CurrentUrl()); } catch { } });
+            menu.Items.Add(Lang.T("tray.devtools"), null, delegate { OpenDevTools(); });
+            menu.Items.Add(Lang.T("tray.browser"), null, delegate { try { Process.Start(CurrentUrl()); } catch { } });
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(Lang.T("tray.quit"), null, delegate { ExitFromTray(); });
+
+            ContextMenuStrip old = _tray.ContextMenuStrip;
+            _tray.ContextMenuStrip = menu;
+            if (old != null) old.Dispose();
         }
 
         private void HideToTray()
@@ -475,8 +542,8 @@ namespace DshView
                 _trayHintShown = true;
                 try
                 {
-                    _tray.BalloonTipTitle = "DeepSeek Harness";
-                    _tray.BalloonTipText = "已最小化到托盘。双击图标可恢复，右键菜单可退出。";
+                    _tray.BalloonTipTitle = Lang.T("app.name");
+                    _tray.BalloonTipText = Lang.T("tray.hint");
                     _tray.ShowBalloonTip(4000);
                 }
                 catch { }
@@ -514,24 +581,30 @@ namespace DshView
             bool userClosed = e.CloseReason == CloseReason.UserClosing || e.CloseReason == CloseReason.ApplicationExitCall;
             if (!_exiting && e.CloseReason == CloseReason.UserClosing)
             {
-                if (_s.CloseToTray)
+                if (_s.CloseAction == "tray")
                 {
                     e.Cancel = true;
                     HideToTray();
                     return;
                 }
-
-                // closetotray=0 asks instead of quitting. The prompt is posted to
-                // the message loop rather than opened here: running a modal dialog
-                // from inside the closing handler would block a form that is
-                // already tearing down.
-                e.Cancel = true;
-                if (!_closePromptOpen)
+                if (_s.CloseAction == "quit")
                 {
-                    _closePromptOpen = true;
-                    BeginInvoke((MethodInvoker)delegate { AskCloseChoice(); });
+                    App.Log("closing: closeaction=quit");
+                    // Fall through and let the window close.
                 }
-                return;
+                else
+                {
+                    // closeaction=ask: the prompt is posted to the message loop
+                    // rather than opened here, because running a modal dialog from
+                    // inside the closing handler blocks a form already tearing down.
+                    e.Cancel = true;
+                    if (!_closePromptOpen)
+                    {
+                        _closePromptOpen = true;
+                        BeginInvoke((MethodInvoker)delegate { AskCloseChoice(); });
+                    }
+                    return;
+                }
             }
 
             if (_tray != null)
@@ -550,19 +623,23 @@ namespace DshView
             try
             {
                 DialogResult choice;
+                bool remember;
                 using (CloseDialog dlg = new CloseDialog())
                 {
                     choice = dlg.ShowDialog(this);
+                    remember = dlg.RememberChoice;
                 }
-                App.Log("close prompt: " + choice);
+                App.Log("close prompt: " + choice + (remember ? " (remembered)" : ""));
 
                 if (choice == DialogResult.Yes)
                 {
+                    if (remember) RememberCloseAction("tray");
                     HideToTray();
                     return;
                 }
                 if (choice == DialogResult.No)
                 {
+                    if (remember) RememberCloseAction("quit");
                     App.Log("exit requested from close prompt");
                     _exiting = true;
                     Close();
@@ -573,6 +650,15 @@ namespace DshView
             {
                 _closePromptOpen = false;
             }
+        }
+
+        // Applies the choice for this session immediately and remembers it for
+        // the next launch. A read-only ini still gets the in-memory behaviour.
+        private void RememberCloseAction(string action)
+        {
+            _s.CloseAction = action;
+            if (!IniFile.Set(App.IniPath, "closeaction", action))
+                App.Log("closeaction=" + action + " not saved; applies to this session only");
         }
 
         private Button MakeButton(string text, string tip)
@@ -595,7 +681,8 @@ namespace DshView
             if (right < 500) return;
 
             int menuX = right - 32;
-            int zoomInX = menuX - 32;
+            int gearX = menuX - 32;
+            int zoomInX = gearX - 32;
             int zoomLabelX = zoomInX - 46;
             int zoomOutX = zoomLabelX - 32;
 
@@ -611,6 +698,7 @@ namespace DshView
             _zoomOut.SetBounds(zoomOutX, top, 32, h);
             _zoomLabel.SetBounds(zoomLabelX, top, 46, h);
             _zoomIn.SetBounds(zoomInX, top, 32, h);
+            _gear.SetBounds(gearX, top, 32, h);
             _menu.SetBounds(menuX, top, 32, h);
         }
 
@@ -619,7 +707,7 @@ namespace DshView
             string runtime = App.ResolveRuntime(_s.Runtime);
             string dataDir = Path.Combine(App.BaseDir, string.IsNullOrWhiteSpace(_s.Data) ? "profile" : _s.Data);
             try { Directory.CreateDirectory(dataDir); }
-            catch (Exception ex) { Fail("无法创建数据目录", dataDir, ex); return; }
+            catch (Exception ex) { Fail(Lang.T("msg.datadirfail.title"), dataDir, ex); return; }
 
             // A machine-wide WEBVIEW2_BROWSER_EXECUTABLE_FOLDER silently overrides the
             // folder we pass in (common on machines with a package-managed WebView2).
@@ -647,30 +735,27 @@ namespace DshView
                 if (runtime == null)
                 {
                     StringBuilder sb = new StringBuilder();
-                    sb.AppendLine("程序没有找到自带的 webview2 运行时，本机也没有安装系统 WebView2。");
+                    sb.AppendLine(Lang.T("msg.runtimefail.notfound.head"));
                     sb.AppendLine();
                     if (App.LastProbe.Count > 0)
                     {
-                        sb.AppendLine("已尝试这些目录（需包含 msedgewebview2.exe）：");
+                        sb.AppendLine(Lang.T("msg.runtimefail.notfound.tried"));
                         foreach (string p in App.LastProbe) sb.AppendLine("  " + p);
                         sb.AppendLine();
                     }
-                    sb.AppendLine("请把完整的 webview2 目录放到 DSHView.exe 旁边；");
-                    sb.AppendLine("或者在本机安装一次 WebView2 运行时，再把 dshview.ini 的 runtime 设为 system。");
+                    sb.AppendLine(Lang.T("msg.runtimefail.notfound.fix"));
                     hint = sb.ToString();
                 }
                 else
                 {
-                    hint = "运行时目录已找到：" + runtime + Environment.NewLine
-                        + "但内核没能启动。常见原因：目录不完整（缺 msedge.dll 或版本号.manifest 文件）、"
-                        + "被杀毒软件隔离、或与另一份 WebView2 冲突。详见 dshview.log。";
+                    hint = Lang.F("msg.runtimefail.found", runtime) + Environment.NewLine + Lang.T("msg.detail.hint");
                 }
-                Fail("WebView2 运行时初始化失败", hint, ex);
+                Fail(Lang.T("msg.runtimefail.title"), hint, ex);
                 return;
             }
 
             try { await _view.EnsureCoreWebView2Async(env); }
-            catch (Exception ex) { Fail("WebView2 控件初始化失败", "详见 dshview.log。", ex); return; }
+            catch (Exception ex) { Fail(Lang.T("msg.controlfail.title"), Lang.T("msg.detail.hint"), ex); return; }
 
             CoreWebView2 core = _view.CoreWebView2;
             core.Settings.AreDefaultContextMenusEnabled = true;
@@ -693,6 +778,7 @@ namespace DshView
                 try { if (_address != null) _address.Text = core.Source; } catch { }
                 App.Log("nav " + (e.IsSuccess ? "ok" : "fail:" + e.WebErrorStatus) + " " + (core.Source ?? ""));
                 if (!e.IsSuccess && !_s.SelfTest) ShowLoadFailure(e.WebErrorStatus);
+                if (e.IsSuccess) DetectLanguage();
                 if (_s.SelfTest) FinishSelfTest(e.IsSuccess, core.Source, e.WebErrorStatus.ToString());
             };
             core.DocumentTitleChanged += delegate
@@ -700,8 +786,8 @@ namespace DshView
                 // Keep a stable window identity in the alt-tab switcher and taskbar.
                 if (_s.Toolbar)
                 {
-                    string t = string.IsNullOrWhiteSpace(core.DocumentTitle) ? "DeepSeek Harness" : core.DocumentTitle;
-                    Text = t + " \u2014 DeepSeek Harness";
+                    string t = string.IsNullOrWhiteSpace(core.DocumentTitle) ? "DSHView" : core.DocumentTitle;
+                    Text = t + " \u2014 DSHView";
                 }
             };
             core.PermissionRequested += delegate(object sender, CoreWebView2PermissionRequestedEventArgs e)
@@ -719,7 +805,7 @@ namespace DshView
             {
                 App.Log("process failed: " + e.ProcessFailedKind + " exit=" + e.ExitCode);
                 if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.BrowserProcessExited && !_s.SelfTest)
-                    MessageBox.Show(this, "浏览器进程异常退出，请重新打开本程序。\n详见 dshview.log。", "DeepSeek Harness", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(this, Lang.T("msg.processfail.body"), Lang.T("app.name"), MessageBoxButtons.OK, MessageBoxIcon.Error);
             };
 
             if (_s.Zoom > 0.3 && _s.Zoom < 3.0)
@@ -744,19 +830,8 @@ namespace DshView
         {
             if (_failureShown) return;
             _failureShown = true;
-            string message = "页面没有加载成功：" + status + Environment.NewLine
-                + Environment.NewLine
-                + "当前地址：" + _s.Url + Environment.NewLine
-                + Environment.NewLine
-                + "如果 dsh web 在另一台机器上，这里不能写 127.0.0.1（那指向本机自己），"
-                + "要写服务器的 IPv4 地址，例如 http://10.0.0.123:3080/ 。" + Environment.NewLine
-                + "服务器那边还必须用同一地址监听：dsh web --host 10.0.0.123 --port 3080"
-                + "（--host 0.0.0.0 不受支持）。" + Environment.NewLine
-                + Environment.NewLine
-                + "如果以前成功打开过，先按 F5 刷新（登录凭据有 30 天有效期）。" + Environment.NewLine
-                + "如果提示未认证，把 dsh web 打印的 ?token=... 地址填进 ini 的 url 再刷新：" + Environment.NewLine
-                + App.IniPath;
-            MessageBox.Show(this, message, "DeepSeek Harness", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            string message = Lang.F("msg.loadfail.body", _s.Url, App.IniPath);
+            MessageBox.Show(this, message, Lang.T("msg.loadfail.title"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         private void GoBack()
@@ -784,7 +859,7 @@ namespace DshView
         {
             App.Log("FATAL " + title + ": " + ex);
             if (_s.SelfTest) { FinishSelfTest(false, _s.Url, title + " | " + ex.Message); return; }
-            MessageBox.Show(this, title + "\n\n" + hint + "\n\n" + ex.Message, "DeepSeek Harness", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, title + "\n\n" + hint + "\n\n" + ex.Message, "DSHView", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
         private void FinishSelfTest(bool ok, string url, string detail)
@@ -849,23 +924,108 @@ namespace DshView
         private void ShowMenu(Button anchor)
         {
             ContextMenuStrip menu = new ContextMenuStrip();
-            menu.Items.Add("复制当前地址", null, delegate { try { Clipboard.SetText(CurrentUrl()); } catch { } });
+            menu.Items.Add(Lang.T("tray.settings"), null, delegate { OpenSettings(); });
+            menu.Items.Add(Lang.T("tray.about"), null, delegate { OpenAbout(); });
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("开发者工具 (F12)", null, delegate { OpenDevTools(); });
-            menu.Items.Add("在系统浏览器中打开", null, delegate { try { Process.Start(CurrentUrl()); } catch { } });
-            menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("关于", null, delegate
-            {
-                string v;
-                try { v = CoreWebView2Environment.GetAvailableBrowserVersionString(App.ResolveRuntime(_s.Runtime)); }
-                catch { v = "未知"; }
-                MessageBox.Show(this,
-                    "DSHView\n\nWebView2 内核：" + v
-                    + "\n数据目录：" + Path.Combine(App.BaseDir, string.IsNullOrWhiteSpace(_s.Data) ? "profile" : _s.Data)
-                    + "\n配置文件：" + App.IniPath,
-                    "关于", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            });
+            menu.Items.Add(Lang.T("tray.copyurl"), null, delegate { try { Clipboard.SetText(CurrentUrl()); } catch { } });
+            menu.Items.Add(Lang.T("tray.devtools"), null, delegate { OpenDevTools(); });
+            menu.Items.Add(Lang.T("tray.browser"), null, delegate { try { Process.Start(CurrentUrl()); } catch { } });
             menu.Show(anchor, new Point(0, anchor.Height));
+        }
+
+        private void OpenSettings()
+        {
+            try
+            {
+                using (SettingsDialog dlg = new SettingsDialog(_s))
+                {
+                    if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                    Settings updated = dlg.Result;
+                    App.Log("settings saved; restart=" + dlg.RestartRequested);
+                    ApplySettings(updated);
+                    if (dlg.RestartRequested) RestartSelf();
+                }
+            }
+            catch (Exception ex) { App.Log("settings dialog failed: " + ex.Message); }
+        }
+
+        // Applies the values that can change without a new process.
+        private void ApplySettings(Settings updated)
+        {
+            _s.Url = updated.Url;
+            _s.CloseAction = updated.CloseAction;
+            _s.UiLang = updated.UiLang;
+
+            if (_s.Icon != updated.Icon)
+            {
+                _s.Icon = updated.Icon;
+                try
+                {
+                    Icon icon = App.PickThemeIcon(_s.Icon);
+                    Icon = icon;
+                    if (_tray != null) _tray.Icon = icon;
+                }
+                catch (Exception ex) { App.Log("icon apply failed: " + ex.Message); }
+            }
+
+            // zoom / toolbar / runtime / data / args / secureorigin need a restart,
+            // which the dialog already tells the user and offers to do.
+            if (updated.UiLang == "zh" || updated.UiLang == "en")
+            {
+                Lang.Current = updated.UiLang;
+                BuildTrayMenu();
+            }
+        }
+
+        private void OpenAbout()
+        {
+            try
+            {
+                using (AboutDialog dlg = new AboutDialog(_s)) dlg.ShowDialog(this);
+            }
+            catch (Exception ex) { App.Log("about dialog failed: " + ex.Message); }
+        }
+
+        // dsh-client-locale mirrors the active UI language into <html lang>
+        // ("zh-CN" for Chinese, the locale id otherwise). Reading it keeps every
+        // DSHView dialog and menu in the same language as the page.
+        private async void DetectLanguage()
+        {
+            if (_s.UiLang != "auto") return;
+            try
+            {
+                CoreWebView2 core = _view.CoreWebView2;
+                if (core == null) return;
+                string raw = await core.ExecuteScriptAsync("document.documentElement.lang || ''");
+                string tag = (raw ?? "").Trim().Trim('"').Replace("\\\"", "\"");
+                string lang = Lang.Normalize(tag);
+                App.Log("page lang: " + (tag.Length == 0 ? "(empty)" : tag));
+                if (lang == null || lang == Lang.Current) return;
+                Lang.Current = lang;
+                App.Log("ui language follows dsh web: " + lang);
+                Text = Lang.T("app.name");
+                BuildTrayMenu();
+            }
+            catch (Exception ex) { App.Log("language detect failed: " + ex.Message); }
+        }
+
+        // Relaunches through --restartwait so the new process waits for this one
+        // to release the WebView2 profile directory.
+        private void RestartSelf()
+        {
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo(
+                    Application.ExecutablePath,
+                    "--restartwait=" + Process.GetCurrentProcess().Id);
+                psi.WorkingDirectory = App.BaseDir;
+                App.Log("restart requested");
+                Process.Start(psi);
+                _exiting = true;
+                Close();
+                Application.Exit();
+            }
+            catch (Exception ex) { App.Log("restart failed: " + ex.Message); }
         }
 
         private string CurrentUrl()
@@ -991,6 +1151,7 @@ namespace DshView
             App.EnsureIni(App.S.Url);
             App.S = Settings.Parse(args);
             App.Log("=== start " + DateTime.Now.ToString("s") + " " + string.Join(" ", args));
+            WaitForPreviousInstance(args);
             try
             {
                 Application.Run(new MainForm(App.S));
@@ -999,6 +1160,25 @@ namespace DshView
             {
                 App.Log("unhandled: " + ex);
                 Environment.ExitCode = 2;
+            }
+        }
+
+        // --restartwait=<pid> keeps "save and restart" honest: a second instance
+        // must not race the first one for the same WebView2 profile directory.
+        private static void WaitForPreviousInstance(string[] args)
+        {
+            foreach (string a in args)
+            {
+                if (!a.StartsWith("--restartwait=")) continue;
+                int pid;
+                if (!int.TryParse(a.Substring(14), out pid)) return;
+                try
+                {
+                    Process previous = Process.GetProcessById(pid);
+                    if (previous.WaitForExit(10000)) App.Log("restart: previous instance exited");
+                    else App.Log("restart: previous instance still running after 10s");
+                }
+                catch (Exception ex) { App.Log("restart wait skipped: " + ex.Message); }
             }
         }
     }

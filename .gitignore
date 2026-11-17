@@ -11,7 +11,7 @@ profile/
 *.log
 *.state
 selftest-result.json
-dshview-client-win64.zip
+dshview-client-*-win64.zip
 
 # 编辑器
 .vs/

@@ -49,6 +49,16 @@ $RuntimeVersion = '157.0.4341.46'
 $SdkVersion = '1.0.3967.48'
 $RuntimeMarker = "$RuntimeVersion.manifest"
 
+# The archive name carries the version, taken from its single source of truth,
+# so a folder holding several builds stays distinguishable by filename alone.
+$Version = $null
+$infoPath = Join-Path $ScriptRoot 'src/AssemblyInfo.cs'
+if (Test-Path $infoPath) {
+    $versionMatch = Select-String -Path $infoPath -Pattern 'AssemblyVersion\("([0-9]+\.[0-9]+\.[0-9]+)' | Select-Object -First 1
+    if ($versionMatch) { $Version = $versionMatch.Matches[0].Groups[1].Value }
+}
+if (-not $Version) { throw 'no AssemblyVersion found in src/AssemblyInfo.cs' }
+
 function Write-Step([string]$Message) { Write-Host "==> $Message" -ForegroundColor Cyan }
 function Write-Note([string]$Message) { Write-Host "    $Message" -ForegroundColor DarkGray }
 
@@ -215,6 +225,10 @@ $cscArgs = @(
     '/r:System.Drawing.dll',
     ('"' + (Join-Path $ScriptRoot 'src/Program.cs') + '"'),
     ('"' + (Join-Path $ScriptRoot 'src/CloseDialog.cs') + '"'),
+    ('"' + (Join-Path $ScriptRoot 'src/IniFile.cs') + '"'),
+    ('"' + (Join-Path $ScriptRoot 'src/Lang.cs') + '"'),
+    ('"' + (Join-Path $ScriptRoot 'src/SettingsDialog.cs') + '"'),
+    ('"' + (Join-Path $ScriptRoot 'src/AboutDialog.cs') + '"'),
     ('"' + (Join-Path $ScriptRoot 'src/AssemblyInfo.cs') + '"')
 )
 Set-Content -LiteralPath $rsp -Value $cscArgs -Encoding ASCII
@@ -228,12 +242,13 @@ finally {
 if ($cscExit -ne 0) { throw "csc failed with exit code $cscExit" }
 
 $size = (Get-ChildItem $OutDir -Recurse -File | Measure-Object Length -Sum).Sum / 1MB
-Write-Step ("Ready: {0} ({1:N0} MB)" -f $OutDir, $size)
+Write-Step ("Ready: {0} (v{1}, {2:N0} MB)" -f $OutDir, $Version, $size)
 
 if ($Zip) {
-    $zipPath = Join-Path $ScriptRoot 'build/dshview-client-win64.zip'
+    $zipPath = Join-Path $ScriptRoot ("build/dshview-client-$Version-win64.zip")
     Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
-    & tar.exe -a -c -f $zipPath -C $OutDir . 2>$null
+    & tar.exe -a -c -f $zipPath -C $OutDir .
+    if ($LASTEXITCODE -ne 0) { throw "tar failed with exit code $LASTEXITCODE" }
     Write-Step ("Zipped: {0} ({1:N0} MB)" -f $zipPath, ((Get-Item $zipPath).Length / 1MB))
 }
 

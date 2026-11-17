@@ -22,7 +22,9 @@ DSHView's approach: **put Microsoft's official fixed-version WebView2 runtime in
 - **Low memory**: GPU and background networking are disabled; ~129MB private memory on an empty page
 - **Clipboard works**: intranet http origins are promoted to a secure context, so `navigator.clipboard` behaves
 - **Four icon modes**: official artwork / follow system theme / fixed dark whale / fixed white whale
-- **Asks before closing**: closing prompts you to pick "minimize to the tray" (the session survives) or "quit"; `closetotray=1` skips the question and always minimizes
+- **Asks before closing, and remembers**: closing prompts you to pick "minimize to the tray" (the session survives) or "quit"; tick "remember my choice" and it stops asking
+- **Tray menu**: show window / settings / about / copy current address / developer tools / open in browser / quit
+- **Settings and about dialogs**: a sectioned card that rewrites the ini in place (comments kept), and an about page with one-click copy
 - **Self-diagnosing**: log file, self-test mode, and a startup failure dialog that names the file to edit
 
 ## Quick start
@@ -69,7 +71,8 @@ No Visual Studio, no .NET SDK, no NuGet client required. The build machine needs
 | `zoom` | `1.0` | initial zoom |
 | `toolbar` | `0` | `1` shows the address bar, back/forward and zoom |
 | `icon` | `default` | `default` / `auto` / `light` / `dark` |
-| `closetotray` | `0` | `0` asks on close: minimize to the tray or quit; `1` = always minimize to the tray |
+| `lang` | `auto` | `auto` follows the dsh web UI / `zh` always Chinese / `en` always English |
+| `closeaction` | `ask` | `ask` prompts every time / `tray` always minimizes to the tray / `quit` always exits (the legacy `closetotray=1` still means `tray` when this key is absent) |
 | `args` | empty | extra Chromium flags |
 | `secureorigin` | `1` | promote http intranet origins to a secure context (needed for clipboard) |
 
@@ -90,14 +93,29 @@ The **static file icon** of the exe is always `default` (what Explorer shows); o
 
 ## Closing and the tray
 
-With the default `closetotray=0`, closing the window **asks first**: minimize to the notification area, or quit. That way a stray click on the × cannot end a session you were reading.
+With the default `closeaction=ask`, closing the window **asks first**: minimize to the notification area, or quit. That way a stray click on the × cannot end a session you were reading.
 
 - *Minimize to the tray*: the window leaves the taskbar (it holds no taskbar slot), the process keeps running, and the DSH session is not interrupted
 - *Quit*: the application exits
 - The dialog's ×, `Esc`, or *Cancel*: nothing happens, the window stays open
-- To stop asking and always minimize silently: set `closetotray=1`
+- Tick **"remember my choice"** and the answer is written to `closeaction` (`tray` or `quit`), so the question is not asked again
+- To change it by hand: `closeaction` = `ask` / `tray` / `quit`
 - Double-click the tray icon → restore the window (keeping its maximized/normal state)
-- Right-click the tray icon → *Show window* / *Quit*
+- Right-click the tray icon → *Show window* / *Settings…* / *About* / *Quit*, plus *Copy current address*, *Developer tools* and *Open in system browser*
+
+> The tray icon now **always** exists (not only when minimizing to the tray): a content-only window has no address bar, so the tray is the only menu surface.
+
+## Settings and about
+
+*Settings…* in the tray menu (or the gear on the right of the toolbar when `toolbar=1`):
+
+- Sections: **Connection** (address, runtime, secure context) / **Appearance** (icon, zoom, address bar) / **Behaviour** (close button, UI language) / **Advanced** (extra Chromium arguments, data directory)
+- Footer: open config file · cancel · save · **save and restart**
+- Saving writes only the values that changed, in place, so comments and ordering survive. Address / runtime / data directory / zoom changes need a restart; the new process waits for the old one to exit, so two instances never race for the same `profile` directory
+
+*About* shows the version, the WebView2 runtime and where it came from, the data directory, config file, log path, project URL and licence, with *Copy info* to paste into a ticket.
+
+**UI language**: with `lang=auto` (the default) menus and dialogs follow the dsh web UI — after a page loads DSHView reads `document.documentElement.lang` (the dsh client mirrors its active locale there; Chinese is `zh-CN`) and switches between Chinese and English. `lang=zh` or `lang=en` pins one.
 
 ## About tokens
 
