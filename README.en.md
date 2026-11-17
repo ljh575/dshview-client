@@ -102,28 +102,45 @@ With the default `closetotray=0`, closing the window **asks first**: minimize to
 ## About tokens
 
 - Authentication is **mandatory**, including on `127.0.0.1` — dsh has no "loopback is exempt" tier.
-- But you only do it **once**: `GET /?token=...` writes a signed cookie bound to `host:port`, valid 30 days by default. Its signing secret is persisted, so **the cookie survives `dsh web` restarts**.
-- The token itself cannot be pinned: it is a random per-process value held in memory, with no config key or CLI flag.
-- To make the credential longer-lived, raise it on the server:
+- **The token changes on every start**: it is a random launch token minted by the dsh process, never written to disk, and there is no environment variable or CLI flag that pins it.
+- You only need it **once**: `GET /?token=...` is exchanged for a signed cookie, and the browser authenticates with that cookie from then on.
+- The cookie is bound to the **authority** (the `host:port` in the Host header, plus the scheme over https). Its signing secret is persisted server-side in `$DSH_HOME/.credentials.yaml`, it lasts 30 days by default, and it **survives a `dsh web` restart** as long as the authority and that secret stay the same.
 
-  ```yaml
-  - name: '@deepseek-ai/dsh-client-connection'
-    config:
-      cookieMaxAgeDays: 3650
-  ```
+### Use a fixed port (strongly recommended)
 
-  The lifetime is written when the cookie is issued, so re-authenticate once after changing it.
+`dsh web` picks a random port by default (`--port 0`), so the port changes on every restart. A new authority invalidates the cookie and the client has to be handed a fresh token URL. Pin the port and the authority stays stable:
+
+```powershell
+dsh web --host 10.0.0.123 --port 3080 --no-open
+```
+
+With a fixed port:
+
+- After a `dsh web` restart the **old address in the client still connects**, even when the token inside it is long dead. Authentication is the cookie's job, not the URL's: a stale `?token=` is ignored and the request is redirected to `./`.
+- You only need to paste a fresh address when the cookie itself is gone: a changed host / port / scheme, more than `cookieMaxAgeDays`, `$DSH_HOME/.credentials.yaml` deleted or moved to another home, or the client's `data` directory cleared.
+- `url` in `dshview.ini` does not need to change while the authority stays the same, and leaving the old token in it does no harm.
+
+Cookie lifetime can be raised on the server:
+
+```yaml
+- name: '@deepseek-ai/dsh-client-connection'
+  config:
+    cookieMaxAgeDays: 3650
+```
+
+The lifetime is stamped at issue time, so re-authenticate once after changing it. And only raise it — lowering it immediately invalidates cookies already issued, because validation requires `expiresAt - issuedAt <= cookieMaxAgeDays`.
 
 ## Deploying across two machines
 
 Server (say `10.0.0.123`):
 
 ```powershell
-dsh --profile web --host 10.0.0.123 --port 3080 --no-open
+dsh web --host 10.0.0.123 --port 3080 --no-open
 ```
 
 - Binding only `127.0.0.1` keeps it local; remote clients cannot reach it
 - `--host 0.0.0.0` is rejected on purpose; name one concrete address
+- Keep the port **fixed** (`3080` above). `--port 0` picks a new port on every restart, which invalidates the cookie and forces the client to be handed a fresh token URL; see "Use a fixed port" above
 - It prints `dsh web: http://10.0.0.123:3080/?token=...` — hand that whole line to the client
 
 Client `dshview.ini`:

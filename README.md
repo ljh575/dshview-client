@@ -102,28 +102,45 @@ exe 的**静态文件图标**固定是 `default`（资源管理器里看得到�
 ## 关于 token
 
 - 访问 dsh 的 Web 界面**必须**认证，本机 `127.0.0.1` 也不例外——dsh 没有"回环地址免认证"这一层。
-- 但只需要**一次**：`GET /?token=...` 后会写入一个绑定 `host:port` 的签名 cookie，默认 30 天，且签名密钥持久化，**dsh web 重启后 cookie 依然有效**。
-- token 本身无法固定：它是 dsh 进程内存里的随机值，不落盘，也没有配置项或命令行开关。
-- 想让凭据更长寿，在服务器侧把 cookie 寿命调长：
+- **token 每次启动都会变**：它是 dsh 进程生成的随机启动令牌，不落盘，也没有环境变量或命令行开关能把它固定住。
+- 但 token 只需要用**一次**：`GET /?token=...` 会被换成一张签名 cookie，之后浏览器靠 cookie 认证。
+- cookie 绑定的是 **authority**（Host 头里的 `host:port`；https 下含协议），签名密钥持久化在服务端 `$DSH_HOME/.credentials.yaml`，默认有效期 30 天，**dsh web 重启后依然有效**（只要 authority 和密钥没变）。
 
-  ```yaml
-  - name: '@deepseek-ai/dsh-client-connection'
-    config:
-      cookieMaxAgeDays: 3650
-  ```
+### 固定端口（强烈建议）
 
-  注意：有效期在签发时写入，改完要重新认证一次才生效。
+`dsh web` 默认用 `--port 0` 取随机端口，**每次重启端口都变**；authority 一变，旧 cookie 立刻失效，客户端就得重新贴一条带新 token 的地址。把端口固定下来，authority 就稳定了：
+
+```powershell
+dsh web --host 10.0.0.123 --port 3080 --no-open
+```
+
+固定端口之后：
+
+- dsh web 重启后，客户端里那条**旧地址照样能连**——哪怕里面的 token 早就过期。认证靠的是 cookie 而不是 URL 里的 token，过期 token 会被服务端忽略并重定向到 `./`。
+- 只有 cookie 也失效时才需要重新贴一次新地址：换了 host / 端口 / 协议，超过 `cookieMaxAgeDays`，`$DSH_HOME/.credentials.yaml` 被删除或换了 home，或者客户端 `data` 目录被清空。
+- `dshview.ini` 里的 `url` 只要 authority 不变就不用改，里面留着旧 token 也不会出问题。
+
+cookie 寿命可以在服务端调长：
+
+```yaml
+- name: '@deepseek-ai/dsh-client-connection'
+  config:
+    cookieMaxAgeDays: 3650
+```
+
+有效期在签发时写死，改完要重新认证一次才生效；而且**只能调大**——调小会让已经签发的 cookie 立刻失效（校验要求 `expiresAt - issuedAt <= cookieMaxAgeDays`）。
 
 ## 部署到另一台机器
 
 服务器（假设 `10.0.0.123`）：
 
 ```powershell
-dsh --profile web --host 10.0.0.123 --port 3080 --no-open
+dsh web --host 10.0.0.123 --port 3080 --no-open
 ```
 
 - 不能只绑 `127.0.0.1`，否则跨机连不上
 - `--host 0.0.0.0` 不被支持，必须写具体地址
+- 端口要**固定**（上面例子里的 `3080`）。`--port 0` 每次重启都换端口，旧 cookie 随之失效，客户端就得重新贴一条带 token 的地址；原因见上面「固定端口」
 - 启动后会打印 `dsh web: http://10.0.0.123:3080/?token=...`，把这一整行给客户端
 
 客户端 `dshview.ini`：
