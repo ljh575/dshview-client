@@ -199,7 +199,7 @@ $icon = Join-Path $ScriptRoot 'src/app_dsh.ico'
     /r:"$OutDir\Microsoft.Web.WebView2.Core.dll" `
     /r:"$OutDir\Microsoft.Web.WebView2.WinForms.dll" `
     /r:System.dll /r:System.Core.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll `
-    "$ScriptRoot\src\Program.cs"
+    "$ScriptRoot\src\Program.cs" "$ScriptRoot\src\AssemblyInfo.cs"
 if ($LASTEXITCODE -ne 0) { throw "csc failed with exit code $LASTEXITCODE" }
 
 $size = (Get-ChildItem $OutDir -Recurse -File | Measure-Object Length -Sum).Sum / 1MB
