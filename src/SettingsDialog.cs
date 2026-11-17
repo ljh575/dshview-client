@@ -53,8 +53,12 @@ namespace DshView
             Font = SystemFonts.MessageBoxFont;
             BackColor = Color.White;
 
+            // Docked bottom footer + scrolling body: the footer keeps its buttons
+            // on one row at any dialog height, and the body takes what is left.
+            // (The first cut pinned the restart note and the config button to the
+            // same corner, so they overlapped once the window got short.)
             _body = new Panel();
-            _body.Bounds = new Rectangle(0, 0, 620, 600);
+            _body.Dock = DockStyle.Fill;
             _body.AutoScroll = true;
             _body.BackColor = Color.White;
             Controls.Add(_body);
@@ -62,6 +66,15 @@ namespace DshView
             BuildRows();
             BuildFooter();
             LoadValues(current);
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            // Keep the whole card on screen when the display (or the owner window)
+            // is short; the body simply scrolls further.
+            int available = Screen.FromControl(this).WorkingArea.Height - 80;
+            if (Height > available && available >= 420) Height = Math.Max(420, available);
         }
 
         /// <summary>The edited values, valid when ShowDialog returned OK.</summary>
@@ -150,40 +163,49 @@ namespace DshView
 
         private void BuildFooter()
         {
+            Panel footer = new Panel();
+            footer.Dock = DockStyle.Bottom;
+            footer.Height = 96;
+            footer.BackColor = Color.White;
+            Controls.Add(footer);
+
+            // The note owns the row above the buttons; the buttons own the last row.
+            // Nothing shares coordinates, so a short dialog cannot overlap them.
             Label note = new Label();
             note.Text = Lang.T("settings.restartnote");
             note.AutoSize = false;
-            note.Bounds = new Rectangle(LabelX, 610, 300, 32);
+            note.Bounds = new Rectangle(LabelX, 6, 584, 40);
             note.ForeColor = Color.FromArgb(107, 114, 128);
-            Controls.Add(note);
+            footer.Controls.Add(note);
 
+            int rowY = 58;
             Button openIni = new Button();
             openIni.Text = Lang.T("btn.openini");
-            openIni.Bounds = new Rectangle(18, 620, 130, 28);
+            openIni.Bounds = new Rectangle(18, rowY, 130, 28);
             openIni.FlatStyle = FlatStyle.System;
             openIni.Click += delegate { OpenConfig(); };
-            Controls.Add(openIni);
+            footer.Controls.Add(openIni);
 
             Button cancel = new Button();
             cancel.Text = Lang.T("btn.cancel");
-            cancel.Bounds = new Rectangle(300, 620, 92, 28);
+            cancel.Bounds = new Rectangle(300, rowY, 92, 28);
             cancel.FlatStyle = FlatStyle.System;
             cancel.DialogResult = DialogResult.Cancel;
-            Controls.Add(cancel);
+            footer.Controls.Add(cancel);
 
             Button save = new Button();
             save.Text = Lang.T("settings.save");
-            save.Bounds = new Rectangle(398, 620, 88, 28);
+            save.Bounds = new Rectangle(398, rowY, 88, 28);
             save.FlatStyle = FlatStyle.System;
             save.Click += delegate { Commit(false); };
-            Controls.Add(save);
+            footer.Controls.Add(save);
 
             Button saveRestart = new Button();
             saveRestart.Text = Lang.T("settings.saverestart");
-            saveRestart.Bounds = new Rectangle(492, 620, 110, 28);
+            saveRestart.Bounds = new Rectangle(492, rowY, 110, 28);
             saveRestart.FlatStyle = FlatStyle.System;
             saveRestart.Click += delegate { Commit(true); };
-            Controls.Add(saveRestart);
+            footer.Controls.Add(saveRestart);
 
             AcceptButton = saveRestart;
             CancelButton = cancel;

@@ -78,6 +78,13 @@ namespace DshView
             CancelButton = close;
         }
 
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            int available = Screen.FromControl(this).WorkingArea.Height - 80;
+            if (Height > available && available >= 320) Height = Math.Max(320, available);
+        }
+
         private void Row(string labelKey, string value)
         {
             Label label = new Label();
