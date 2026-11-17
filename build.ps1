@@ -190,17 +190,41 @@ if (Test-Path (Join-Path $ScriptRoot 'docs')) { Copy-Item (Join-Path $ScriptRoot
 
 Write-Step 'Compiling DSHView.exe'
 $icon = Join-Path $ScriptRoot 'src/app_dsh.ico'
-& $csc /nologo /target:winexe /platform:anycpu /optimize+ `
-    /out:"$OutDir\DSHView.exe" `
-    /win32icon:"$icon" /win32manifest:"$ScriptRoot\src\app.manifest" `
-    /resource:"$icon",app_dsh.ico `
-    /resource:"$ScriptRoot\src\app_black.ico",app_black.ico `
-    /resource:"$ScriptRoot\src\app_white.ico",app_white.ico `
-    /r:"$OutDir\Microsoft.Web.WebView2.Core.dll" `
-    /r:"$OutDir\Microsoft.Web.WebView2.WinForms.dll" `
-    /r:System.dll /r:System.Core.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll `
-    "$ScriptRoot\src\Program.cs" "$ScriptRoot\src\AssemblyInfo.cs"
-if ($LASTEXITCODE -ne 0) { throw "csc failed with exit code $LASTEXITCODE" }
+# csc is invoked through a response file. Inline forms such as
+# /resource:"$path",name are parsed as arrays by PowerShell 7 and /win32icon:"$path"
+# keeps its quotes, so csc ends up reading quotes as part of the file name
+# (CS1566 / CS2021) even though the same lines work in Windows PowerShell 5.1.
+# A response file hands the arguments to csc verbatim and behaves the same in both.
+$rsp = Join-Path ([System.IO.Path]::GetTempPath()) ('dshview-csc-' + [guid]::NewGuid().ToString('N') + '.rsp')
+$cscArgs = @(
+    '/nologo',
+    '/target:winexe',
+    '/platform:anycpu',
+    '/optimize+',
+    ('/out:"' + (Join-Path $OutDir 'DSHView.exe') + '"'),
+    ('/win32icon:"' + $icon + '"'),
+    ('/win32manifest:"' + (Join-Path $ScriptRoot 'src/app.manifest') + '"'),
+    ('/resource:"' + $icon + '",app_dsh.ico'),
+    ('/resource:"' + (Join-Path $ScriptRoot 'src/app_black.ico') + '",app_black.ico'),
+    ('/resource:"' + (Join-Path $ScriptRoot 'src/app_white.ico') + '",app_white.ico'),
+    ('/r:"' + (Join-Path $OutDir 'Microsoft.Web.WebView2.Core.dll') + '"'),
+    ('/r:"' + (Join-Path $OutDir 'Microsoft.Web.WebView2.WinForms.dll') + '"'),
+    '/r:System.dll',
+    '/r:System.Core.dll',
+    '/r:System.Windows.Forms.dll',
+    '/r:System.Drawing.dll',
+    ('"' + (Join-Path $ScriptRoot 'src/Program.cs') + '"'),
+    ('"' + (Join-Path $ScriptRoot 'src/AssemblyInfo.cs') + '"')
+)
+Set-Content -LiteralPath $rsp -Value $cscArgs -Encoding ASCII
+try {
+    & $csc ('@' + $rsp)
+    $cscExit = $LASTEXITCODE
+}
+finally {
+    Remove-Item -LiteralPath $rsp -Force -ErrorAction SilentlyContinue
+}
+if ($cscExit -ne 0) { throw "csc failed with exit code $cscExit" }
 
 $size = (Get-ChildItem $OutDir -Recurse -File | Measure-Object Length -Sum).Sum / 1MB
 Write-Step ("Ready: {0} ({1:N0} MB)" -f $OutDir, $size)
