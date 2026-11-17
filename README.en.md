@@ -115,7 +115,7 @@ With the default `closeaction=ask`, closing the window **asks first**: minimize 
 
 *About* shows the version, the WebView2 runtime and where it came from, the data directory, config file, log path, project URL and licence, with *Copy info* to paste into a ticket.
 
-**UI language**: with `lang=auto` (the default) menus and dialogs follow the dsh web UI — after a page loads DSHView reads `document.documentElement.lang` (the dsh client mirrors its active locale there; Chinese is `zh-CN`) and switches between Chinese and English. `lang=zh` or `lang=en` pins one.
+**UI language**: with `lang=auto` (the default) menus and dialogs follow the dsh web UI by reading `document.documentElement.lang` (the dsh client mirrors its active locale there; Chinese is `zh-CN`). Switching the language inside dsh web takes effect **immediately, with no reload**: an observer injected into the page watches `<html lang>` and the theme attributes and tells the host to re-read, and a few probes at 0/600/1200 ms after each load cover the late arrival of the dsh settings scope. `lang=zh` or `lang=en` pins one.
 
 ## About tokens
 

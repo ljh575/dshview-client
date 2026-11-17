@@ -392,6 +392,7 @@ namespace DshView
         private FormWindowState _stateBeforeHide = FormWindowState.Normal;
         private bool _trayHintShown;
         private bool _closePromptOpen;
+        private string _lastPageLang = "";
 
         public MainForm(Settings settings)
         {
@@ -519,8 +520,8 @@ namespace DshView
             menu.Items.Add(Lang.T("tray.devtools"), null, delegate { OpenDevTools(); });
             menu.Items.Add(Lang.T("tray.browser"), null, delegate { try { Process.Start(CurrentUrl()); } catch { } });
             menu.Items.Add(new ToolStripSeparator());
-            // Settings/About sit just above Quit: the everyday shortcuts stay at
-            // the top, and the two admin entries sit next to the exit.
+            // Settings/About sit just above Quit: the shortcuts people reach for
+            // stay at the top, and the two admin entries sit next to the exit.
             menu.Items.Add(Lang.T("tray.settings"), null, delegate { OpenSettings(); });
             menu.Items.Add(Lang.T("tray.about"), null, delegate { OpenAbout(); });
             menu.Items.Add(new ToolStripSeparator());
@@ -766,6 +767,26 @@ namespace DshView
             core.Settings.IsZoomControlEnabled = true;
             core.Settings.AreBrowserAcceleratorKeysEnabled = true;
             core.Settings.IsPasswordAutosaveEnabled = false;
+            core.Settings.IsWebMessageEnabled = true;
+
+            // The page posts one message whenever <html>/<body> attributes change,
+            // which is how a language or theme switch made inside the dsh web shell
+            // reaches us: that is a SPA setting change, so no navigation happens and
+            // a navigation-only probe would keep the old language until a reload.
+            core.WebMessageReceived += delegate(object sender, CoreWebView2WebMessageReceivedEventArgs e)
+            {
+                string message;
+                try { message = e.TryGetWebMessageAsString(); }
+                catch { return; }
+                if (message != PageObserver.Message) return;
+                BeginInvoke((MethodInvoker)delegate { DetectLanguage(); });
+            };
+            try
+            {
+                await core.AddScriptToExecuteOnDocumentCreatedAsync(PageObserver.Script);
+                App.Log("page observer injected");
+            }
+            catch (Exception ex) { App.Log("page observer injection failed: " + ex.Message); }
 
             core.NavigationStarting += delegate(object sender, CoreWebView2NavigationStartingEventArgs e)
             {
@@ -780,7 +801,7 @@ namespace DshView
                 try { if (_address != null) _address.Text = core.Source; } catch { }
                 App.Log("nav " + (e.IsSuccess ? "ok" : "fail:" + e.WebErrorStatus) + " " + (core.Source ?? ""));
                 if (!e.IsSuccess && !_s.SelfTest) ShowLoadFailure(e.WebErrorStatus);
-                if (e.IsSuccess) DetectLanguage();
+                if (e.IsSuccess) ScheduleLanguageProbes();
                 if (_s.SelfTest) FinishSelfTest(e.IsSuccess, core.Source, e.WebErrorStatus.ToString());
             };
             core.DocumentTitleChanged += delegate
@@ -988,9 +1009,31 @@ namespace DshView
             catch (Exception ex) { App.Log("about dialog failed: " + ex.Message); }
         }
 
+        // After a load, probe a few times: the Host settings scope that carries the
+        // locale arrives after the shell has already painted, so the first read can
+        // still be the provisional navigator.languages value. Same 0/600/1200ms
+        // pattern the official launcher uses.
+        private void ScheduleLanguageProbes()
+        {
+            DetectLanguage();
+            System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
+            int ticks = 0;
+            timer.Interval = 600;
+            timer.Tick += delegate
+            {
+                ticks++;
+                DetectLanguage();
+                if (ticks < 2) return;
+                timer.Stop();
+                timer.Dispose();
+            };
+            timer.Start();
+        }
+
         // dsh-client-locale mirrors the active UI language into <html lang>
         // ("zh-CN" for Chinese, the locale id otherwise). Reading it keeps every
-        // DSHView dialog and menu in the same language as the page.
+        // DSHView dialog and menu in the same language as the page. Called after a
+        // load and whenever the injected observer reports a change.
         private async void DetectLanguage()
         {
             if (_s.UiLang != "auto") return;
@@ -1001,6 +1044,8 @@ namespace DshView
                 string raw = await core.ExecuteScriptAsync("document.documentElement.lang || ''");
                 string tag = (raw ?? "").Trim().Trim('"').Replace("\\\"", "\"");
                 string lang = Lang.Normalize(tag);
+                if (tag == _lastPageLang && lang == Lang.Current) return;
+                _lastPageLang = tag;
                 App.Log("page lang: " + (tag.Length == 0 ? "(empty)" : tag));
                 if (lang == null || lang == Lang.Current) return;
                 Lang.Current = lang;
