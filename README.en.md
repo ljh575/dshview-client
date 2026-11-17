@@ -23,7 +23,7 @@ DSHView's approach: **put Microsoft's official fixed-version WebView2 runtime in
 - **Clipboard works**: intranet http origins are promoted to a secure context, so `navigator.clipboard` behaves
 - **Four icon modes**: official artwork / follow system theme / fixed dark whale / fixed white whale
 - **Asks before closing, and remembers**: closing prompts you to pick "minimize to the tray" (the session survives) or "quit"; tick "remember my choice" and it stops asking
-- **Tray menu**: show window / settings / about / copy current address / developer tools / open in browser / quit
+- **Tray menu**: show window / copy current address / developer tools / open in browser / settings / about / quit
 - **Settings and about dialogs**: a sectioned card that rewrites the ini in place (comments kept), and an about page with one-click copy
 - **Self-diagnosing**: log file, self-test mode, and a startup failure dialog that names the file to edit
 
@@ -101,7 +101,7 @@ With the default `closeaction=ask`, closing the window **asks first**: minimize 
 - Tick **"remember my choice"** and the answer is written to `closeaction` (`tray` or `quit`), so the question is not asked again
 - To change it by hand: `closeaction` = `ask` / `tray` / `quit`
 - Double-click the tray icon → restore the window (keeping its maximized/normal state)
-- Right-click the tray icon → *Show window* / *Settings…* / *About* / *Quit*, plus *Copy current address*, *Developer tools* and *Open in system browser*
+- Right-click the tray icon → *Show window* / *Copy current address* / *Developer tools* / *Open in system browser* / *Settings…* / *About* / *Quit*
 
 > The tray icon now **always** exists (not only when minimizing to the tray): a content-only window has no address bar, so the tray is the only menu surface.
 

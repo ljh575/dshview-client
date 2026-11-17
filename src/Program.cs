@@ -515,12 +515,14 @@ namespace DshView
             ContextMenuStrip menu = new ContextMenuStrip();
             menu.Items.Add(Lang.T("tray.show"), null, delegate { RestoreFromTray(); });
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add(Lang.T("tray.settings"), null, delegate { OpenSettings(); });
-            menu.Items.Add(Lang.T("tray.about"), null, delegate { OpenAbout(); });
-            menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(Lang.T("tray.copyurl"), null, delegate { try { Clipboard.SetText(CurrentUrl()); } catch { } });
             menu.Items.Add(Lang.T("tray.devtools"), null, delegate { OpenDevTools(); });
             menu.Items.Add(Lang.T("tray.browser"), null, delegate { try { Process.Start(CurrentUrl()); } catch { } });
+            menu.Items.Add(new ToolStripSeparator());
+            // Settings/About sit just above Quit: the everyday shortcuts stay at
+            // the top, and the two admin entries sit next to the exit.
+            menu.Items.Add(Lang.T("tray.settings"), null, delegate { OpenSettings(); });
+            menu.Items.Add(Lang.T("tray.about"), null, delegate { OpenAbout(); });
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(Lang.T("tray.quit"), null, delegate { ExitFromTray(); });
 
