@@ -392,6 +392,8 @@ namespace DshView
         private FormWindowState _stateBeforeHide = FormWindowState.Normal;
         private bool _trayHintShown;
         private bool _closePromptOpen;
+        private bool _webViewTornDown;
+        private static readonly int _showMessage = Instance.ShowMessage;
         private string _lastPageLang = "";
 
         public MainForm(Settings settings)
@@ -565,15 +567,56 @@ namespace DshView
 
         private void ExitFromTray()
         {
-            _exiting = true;
             App.Log("exit requested from tray");
+            Shutdown("tray menu");
+        }
+
+        // Every exit path funnels through here: the WebView2 browser process has to
+        // be gone before Application.Exit(), otherwise it is orphaned and the next
+        // launch stacks another one on top.
+        private void TeardownWebView(string reason)
+        {
+            if (_webViewTornDown) return;
+            _webViewTornDown = true;
+            _exiting = true;
+            App.Log("teardown (" + reason + ")");
+
+            if (_selfTestTimer != null)
+            {
+                try { _selfTestTimer.Stop(); _selfTestTimer.Dispose(); } catch { }
+                _selfTestTimer = null;
+            }
             if (_tray != null)
             {
-                _tray.Visible = false;
-                _tray.Dispose();
+                try { _tray.Visible = false; } catch { }
+            }
+
+            uint browserProcessId = 0;
+            try
+            {
+                if (_view != null && _view.CoreWebView2 != null) browserProcessId = _view.CoreWebView2.BrowserProcessId;
+            }
+            catch (Exception ex) { App.Log("browser pid unavailable: " + ex.Message); }
+
+            try
+            {
+                if (_view != null) _view.Dispose();
+                _view = null;
+            }
+            catch (Exception ex) { App.Log("view dispose failed: " + ex.Message); }
+
+            WebViewProcess.WaitAndReap(browserProcessId);
+
+            if (_tray != null)
+            {
+                try { _tray.Dispose(); } catch { }
                 _tray = null;
             }
-            Close();
+        }
+
+        private void Shutdown(string reason)
+        {
+            TeardownWebView(reason);
             Application.Exit();
         }
 
@@ -644,9 +687,7 @@ namespace DshView
                 {
                     if (remember) RememberCloseAction("quit");
                     App.Log("exit requested from close prompt");
-                    _exiting = true;
-                    Close();
-                    Application.Exit();
+                    Shutdown("close prompt");
                 }
             }
             finally
@@ -761,6 +802,7 @@ namespace DshView
             catch (Exception ex) { Fail(Lang.T("msg.controlfail.title"), Lang.T("msg.detail.hint"), ex); return; }
 
             CoreWebView2 core = _view.CoreWebView2;
+            try { App.Log("browserpid=" + core.BrowserProcessId); } catch { }
             core.Settings.AreDefaultContextMenusEnabled = true;
             core.Settings.AreDevToolsEnabled = true;
             core.Settings.IsStatusBarEnabled = false;
@@ -900,6 +942,10 @@ namespace DshView
             }
             catch { }
             Environment.ExitCode = ok ? 0 : 1;
+            // Tear the WebView2 tree down before exiting: --selftest used to call
+            // Environment.Exit straight away and leave a browser process behind on
+            // every run, which is one of the ways the process count kept growing.
+            try { TeardownWebView("selftest"); } catch { }
             try { Application.Exit(); } catch { }
             Environment.Exit(Environment.ExitCode);
         }
@@ -1058,18 +1104,20 @@ namespace DshView
 
         // Relaunches through --restartwait so the new process waits for this one
         // to release the WebView2 profile directory.
+        // Relaunches through --restartwait. The WebView2 tree is torn down first so
+        // the replacement never shares the profile directory with a dying browser.
         private void RestartSelf()
         {
             try
             {
+                int self = Process.GetCurrentProcess().Id;
+                TeardownWebView("restart");
                 ProcessStartInfo psi = new ProcessStartInfo(
                     Application.ExecutablePath,
-                    "--restartwait=" + Process.GetCurrentProcess().Id);
+                    "--restartwait=" + self);
                 psi.WorkingDirectory = App.BaseDir;
                 App.Log("restart requested");
                 Process.Start(psi);
-                _exiting = true;
-                Close();
                 Application.Exit();
             }
             catch (Exception ex) { App.Log("restart failed: " + ex.Message); }
@@ -1172,17 +1220,27 @@ namespace DshView
         {
             if (disposing)
             {
-                if (_tray != null)
-                {
-                    try { _tray.Visible = false; _tray.Dispose(); } catch { }
-                    _tray = null;
-                }
-                if (_view != null)
-                {
-                    try { _view.Dispose(); } catch { }
-                }
+                // Last-resort path: covers exits that never went through Shutdown.
+                try { TeardownWebView("dispose"); } catch { }
             }
             base.Dispose(disposing);
+        }
+
+        // A second launch broadcasts this instead of starting its own WebView2.
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == _showMessage && _showMessage != 0)
+            {
+                App.Log("activation requested by another launch");
+                try
+                {
+                    if (!Visible) RestoreFromTray();
+                    else { WindowState = WindowState == FormWindowState.Minimized ? FormWindowState.Normal : WindowState; Activate(); BringToFront(); }
+                }
+                catch (Exception ex) { App.Log("activation failed: " + ex.Message); }
+                return;
+            }
+            base.WndProc(ref m);
         }
     }
 
@@ -1198,6 +1256,19 @@ namespace DshView
             App.EnsureIni(App.S.Url);
             App.S = Settings.Parse(args);
             App.Log("=== start " + DateTime.Now.ToString("s") + " " + string.Join(" ", args));
+            App.Log("pid=" + Process.GetCurrentProcess().Id);
+
+            // --restartwait comes from our own "save and restart", so it must be
+            // allowed through the single-instance guard while the old process is
+            // still finishing its teardown.
+            bool restarting = HasRestartWait(args);
+            if (!restarting && !Instance.IsFirstInstance())
+            {
+                App.Log("another instance is already running; asking it to show");
+                Instance.ActivateRunning();
+                return;
+            }
+
             WaitForPreviousInstance(args);
             try
             {
@@ -1208,6 +1279,13 @@ namespace DshView
                 App.Log("unhandled: " + ex);
                 Environment.ExitCode = 2;
             }
+        }
+
+        private static bool HasRestartWait(string[] args)
+        {
+            foreach (string a in args)
+                if (a.StartsWith("--restartwait=")) return true;
+            return false;
         }
 
         // --restartwait=<pid> keeps "save and restart" honest: a second instance

@@ -25,6 +25,7 @@ DSHView's approach: **put Microsoft's official fixed-version WebView2 runtime in
 - **Asks before closing, and remembers**: closing prompts you to pick "minimize to the tray" (the session survives) or "quit"; tick "remember my choice" and it stops asking
 - **Tray menu**: show window / copy current address / developer tools / open in browser / settings / about / quit
 - **Settings and about dialogs**: a sectioned card that rewrites the ini in place (comments kept), and an about page with one-click copy
+- **Single instance**: launching again never starts a second engine, it brings the running window (tray included) back to the front
 - **Self-diagnosing**: log file, self-test mode, and a startup failure dialog that names the file to edit
 
 ## Quick start
