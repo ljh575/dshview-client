@@ -40,11 +40,11 @@ namespace DshView
         var root = document.documentElement;
         if (root) {
           mo.observe(root, { attributes: true,
-            attributeFilter: ['lang', 'class', 'style', 'data-theme', 'data-color-scheme'] });
+            attributeFilter: ['lang', 'class', 'style', 'data-theme', 'data-color-scheme', 'data-ds-dark-theme', 'color-scheme'] });
         }
         if (document.body) {
           mo.observe(document.body, { attributes: true,
-            attributeFilter: ['class', 'style', 'data-theme', 'data-color-scheme'] });
+            attributeFilter: ['class', 'style', 'data-theme', 'data-color-scheme', 'data-ds-dark-theme'] });
         }
         try {
           var mq = window.matchMedia('(prefers-color-scheme: dark)');

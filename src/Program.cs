@@ -395,6 +395,11 @@ namespace DshView
         private bool _webViewTornDown;
         private static readonly int _showMessage = Instance.ShowMessage;
         private string _lastPageLang = "";
+        private Panel _shell;
+        private Panel _title;
+        private Label _titleText;
+        private ChromeButton _btnMin, _btnMax, _btnClose;
+        private bool _dark;
 
         public MainForm(Settings settings)
         {
@@ -406,9 +411,16 @@ namespace DshView
             StartPosition = FormStartPosition.CenterScreen;
             Size = new Size(1180, 820);
             MinimumSize = new Size(560, 420);
+            // The native title bar cannot be recoloured on Windows 10, so the window
+            // is borderless and draws its own caption. The form's own background is
+            // the 1px gray border; the shell sits one pixel inside it.
+            FormBorderStyle = FormBorderStyle.None;
+            BackColor = BorderColor();
             try { Icon = App.PickThemeIcon(_s.Icon); }
             catch { }
             LoadLayout();
+            BuildShell();
+            BuildTitleBar();
             // The tray is created even when closing quits outright: with toolbar=0
             // it is the only surface for settings/about, so it must always exist.
             if (!_s.SelfTest) SetupTray();
@@ -418,7 +430,7 @@ namespace DshView
             _view = new WebView2();
             _view.Dock = DockStyle.Fill;
             _view.DefaultBackgroundColor = Color.White;
-            Controls.Add(_view);
+            _shell.Controls.Add(_view);
             _view.BringToFront();
 
             Shown += delegate
@@ -434,13 +446,87 @@ namespace DshView
             KeyDown += OnKeyDown;
         }
 
+        private const int ChromeBorder = 1;   // 1px gray border around the window
+
+        private Color BorderColor()
+        {
+            return _dark ? Color.FromArgb(60, 60, 60) : Color.FromArgb(200, 200, 200);
+        }
+
+        // The shell holds everything (title bar, toolbar, webview) and is inset by
+        // one pixel so the form's own background shows through as a thin gray border.
+        private void BuildShell()
+        {
+            _shell = new Panel();
+            _shell.BackColor = Color.White;
+            _shell.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            Controls.Add(_shell);
+            LayoutShell();
+        }
+
+        private void LayoutShell()
+        {
+            if (_shell == null) return;
+            _shell.Bounds = new Rectangle(ChromeBorder, ChromeBorder,
+                ClientSize.Width - ChromeBorder * 2, ClientSize.Height - ChromeBorder * 2);
+        }
+
+        // Custom caption drawn inside the shell: app title on the left, the three
+        // window buttons on the right. Drag by the caption technique, double-click
+        // to maximize.
+        private void BuildTitleBar()
+        {
+            _title = new Panel { Dock = DockStyle.Top, Height = 32, BackColor = Color.White };
+            _shell.Controls.Add(_title);
+
+            _titleText = new Label
+            {
+                Text = Lang.T("app.name"),
+                AutoSize = false,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(11, 0, 0, 0),
+                Font = new Font("Segoe UI", 9f),
+                BackColor = Color.Transparent,
+                ForeColor = Color.Black,
+            };
+            _title.Controls.Add(_titleText);
+
+            _btnClose = new ChromeButton("\u2715") { IsClose = true, Dock = DockStyle.Right, Width = 46 };
+            _btnMax = new ChromeButton("\u25A1") { Dock = DockStyle.Right, Width = 46 };
+            _btnMin = new ChromeButton("\u2500") { Dock = DockStyle.Right, Width = 46 };
+            // Dock=Right docks the last-added control first (rightmost): min, max, close.
+            _title.Controls.Add(_btnMin);
+            _title.Controls.Add(_btnMax);
+            _title.Controls.Add(_btnClose);
+
+            _btnMin.Click += delegate { WindowState = FormWindowState.Minimized; };
+            _btnMax.Click += delegate { ToggleMaximize(); };
+            _btnClose.Click += delegate { Close(); };
+
+            MouseEventHandler drag = delegate(object sender, MouseEventArgs e)
+            {
+                if (e.Button != MouseButtons.Left || WindowState == FormWindowState.Maximized) return;
+                WindowChrome.Drag(this);
+            };
+            _title.MouseDown += drag;
+            _titleText.MouseDown += drag;
+            _title.DoubleClick += delegate { ToggleMaximize(); };
+            _titleText.DoubleClick += delegate { ToggleMaximize(); };
+        }
+
+        private void ToggleMaximize()
+        {
+            WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
+        }
+
         private void BuildToolbar()
         {
             _bar = new Panel();
             _bar.Dock = DockStyle.Top;
             _bar.Height = 40;
             _bar.BackColor = Color.FromArgb(246, 247, 249);
-            Controls.Add(_bar);
+            _shell.Controls.Add(_bar);
 
             _back = MakeButton("\u2190", Lang.T("toolbar.back"));
             _forward = MakeButton("\u2192", Lang.T("toolbar.forward"));
@@ -821,7 +907,7 @@ namespace DshView
                 try { message = e.TryGetWebMessageAsString(); }
                 catch { return; }
                 if (message != PageObserver.Message) return;
-                BeginInvoke((MethodInvoker)delegate { DetectLanguage(); });
+                BeginInvoke((MethodInvoker)delegate { DetectLanguage(); DetectDark(); });
             };
             try
             {
@@ -843,17 +929,16 @@ namespace DshView
                 try { if (_address != null) _address.Text = core.Source; } catch { }
                 App.Log("nav " + (e.IsSuccess ? "ok" : "fail:" + e.WebErrorStatus) + " " + (core.Source ?? ""));
                 if (!e.IsSuccess && !_s.SelfTest) ShowLoadFailure(e.WebErrorStatus);
-                if (e.IsSuccess) ScheduleLanguageProbes();
+                if (e.IsSuccess) SchedulePageProbes();
                 if (_s.SelfTest) FinishSelfTest(e.IsSuccess, core.Source, e.WebErrorStatus.ToString());
             };
             core.DocumentTitleChanged += delegate
             {
-                // Keep a stable window identity in the alt-tab switcher and taskbar.
-                if (_s.Toolbar)
-                {
-                    string t = string.IsNullOrWhiteSpace(core.DocumentTitle) ? "DSHView" : core.DocumentTitle;
-                    Text = t + " \u2014 DSHView";
-                }
+                // Keep a stable window identity in the alt-tab switcher and taskbar,
+                // and mirror the page title into the custom title bar.
+                string t = string.IsNullOrWhiteSpace(core.DocumentTitle) ? Lang.T("app.name") : core.DocumentTitle;
+                Text = t + " \u2014 DSHView";
+                if (_titleText != null) _titleText.Text = t;
             };
             core.PermissionRequested += delegate(object sender, CoreWebView2PermissionRequestedEventArgs e)
             {
@@ -1059,9 +1144,10 @@ namespace DshView
         // locale arrives after the shell has already painted, so the first read can
         // still be the provisional navigator.languages value. Same 0/600/1200ms
         // pattern the official launcher uses.
-        private void ScheduleLanguageProbes()
+        private void SchedulePageProbes()
         {
             DetectLanguage();
+            DetectDark();
             System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
             int ticks = 0;
             timer.Interval = 600;
@@ -1069,6 +1155,7 @@ namespace DshView
             {
                 ticks++;
                 DetectLanguage();
+                DetectDark();
                 if (ticks < 2) return;
                 timer.Stop();
                 timer.Dispose();
@@ -1100,6 +1187,59 @@ namespace DshView
                 BuildTrayMenu();
             }
             catch (Exception ex) { App.Log("language detect failed: " + ex.Message); }
+        }
+
+        // Reads whether the dsh web page is rendering dark (via html color-scheme or
+        // body[data-ds-dark-theme]) and recolours the custom title bar + border. The
+        // observer triggers this on attribute changes, so it follows the theme live.
+        private async void DetectDark()
+        {
+            try
+            {
+                CoreWebView2 core = _view == null ? null : _view.CoreWebView2;
+                if (core == null) return;
+                string raw = await core.ExecuteScriptAsync(
+                    "(function(){var cs='';try{cs=getComputedStyle(document.documentElement).colorScheme||'';}catch(e){}" +
+                    "var da=document.body&&document.body.hasAttribute('data-ds-dark-theme');" +
+                    "return (cs.indexOf('dark')>=0||da)?'dark':'light';})()");
+                string state = ThemeUnquote(raw);
+                bool dark = state == "dark";
+                if (dark == _dark) return;
+                _dark = dark;
+                App.Log("title bar theme: " + (dark ? "dark" : "light"));
+                ApplyTitleBarTheme();
+            }
+            catch (Exception ex) { App.Log("dark detect failed: " + ex.Message); }
+        }
+
+        private void ApplyTitleBarTheme()
+        {
+            ChromeButton.Dark = _dark;
+            Color border = BorderColor();
+            Color titleBg = _dark ? Color.FromArgb(31, 31, 31) : Color.White;
+            Color fg = _dark ? Color.White : Color.Black;
+            Color shellBg = _dark ? Color.FromArgb(30, 30, 30) : Color.White;
+
+            BackColor = border;
+            if (_shell != null) _shell.BackColor = shellBg;
+            if (_title != null)
+            {
+                _title.BackColor = titleBg;
+                if (_titleText != null)
+                {
+                    _titleText.BackColor = titleBg;
+                    _titleText.ForeColor = fg;
+                }
+                foreach (Control c in _title.Controls) if (c is ChromeButton) c.Invalidate();
+            }
+            if (_view != null) _view.DefaultBackgroundColor = shellBg;
+        }
+
+        private static string ThemeUnquote(string raw)
+        {
+            string v = (raw ?? "").Trim();
+            if (v.Length >= 2 && v[0] == '"' && v[v.Length - 1] == '"') v = v.Substring(1, v.Length - 2);
+            return v;
         }
 
         // Relaunches through --restartwait so the new process waits for this one
@@ -1240,8 +1380,52 @@ namespace DshView
                 catch (Exception ex) { App.Log("activation failed: " + ex.Message); }
                 return;
             }
+
+            // A borderless window has no resize edges; answer WM_NCHITTEST along a
+            // thin border so the window still resizes like a normal one.
+            if (m.Msg == 0x0084 && WindowState != FormWindowState.Maximized)
+            {
+                base.WndProc(ref m);
+                if (m.Result.ToInt32() == 1) // HTCLIENT
+                {
+                    Point p = PointToClient(new Point(unchecked((short)(long)m.LParam), unchecked((short)((long)m.LParam >> 16))));
+                    int r = 6;
+                    bool L = p.X <= r, R = p.X >= ClientSize.Width - r, T = p.Y <= r, B = p.Y >= ClientSize.Height - r;
+                    int hit = 0;
+                    if (T && L) hit = 13; else if (T && R) hit = 14; else if (B && L) hit = 16; else if (B && R) hit = 17;
+                    else if (L) hit = 10; else if (R) hit = 11; else if (T) hit = 12; else if (B) hit = 15;
+                    if (hit != 0) { m.Result = (IntPtr)hit; return; }
+                }
+                return;
+            }
+
             base.WndProc(ref m);
         }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            if (_shell != null) LayoutShell();
+            if (_btnMax != null) _btnMax.Glyph = WindowState == FormWindowState.Maximized ? "\u2750" : "\u25A1";
+        }
+    }
+
+    // Minimal window helpers for the borderless title bar: dragging via the caption
+    // technique. (Theme colours live on MainForm, not here.)
+    internal static class WindowChrome
+    {
+        public static void Drag(Form form)
+        {
+            if (form == null || form.WindowState == FormWindowState.Maximized) return;
+            ReleaseCapture();
+            SendMessage(form.Handle, 0x00A1, (IntPtr)2, IntPtr.Zero);
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool ReleaseCapture();
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
     }
 
     internal static class Program

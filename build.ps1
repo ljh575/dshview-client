@@ -227,6 +227,7 @@ $cscArgs = @(
     ('"' + (Join-Path $ScriptRoot 'src/CloseDialog.cs') + '"'),
     ('"' + (Join-Path $ScriptRoot 'src/IniFile.cs') + '"'),
     ('"' + (Join-Path $ScriptRoot 'src/Lang.cs') + '"'),
+    ('"' + (Join-Path $ScriptRoot 'src/ChromeButton.cs') + '"'),
     ('"' + (Join-Path $ScriptRoot 'src/PageObserver.cs') + '"'),
     ('"' + (Join-Path $ScriptRoot 'src/Instance.cs') + '"'),
     ('"' + (Join-Path $ScriptRoot 'src/WebViewProcess.cs') + '"'),
