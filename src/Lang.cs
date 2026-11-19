@@ -6,8 +6,7 @@ namespace DshView
     // Two-language string table. The active language follows the dsh web UI:
     // @deepseek-ai/dsh-client-locale mirrors its locale into <html lang>
     // ("zh-CN" for Chinese, the locale id otherwise), and MainForm reads that
-    // with ExecuteScriptAsync after a page loads. lang= in the ini can pin a
-    // language instead (auto | zh | en).
+    // with ExecuteScriptAsync after a page loads.
     //
     // Keys missing from a table fall back to the other table and finally to the
     // key itself, so a half-translated build still renders something usable.
@@ -73,13 +72,6 @@ namespace DshView
             { "tray.browser", "在系统浏览器中打开" },
             { "tray.quit", "退出" },
             { "tray.hint", "已最小化到托盘。双击图标可恢复，右键菜单可退出。" },
-            { "toolbar.back", "后退 (Alt+左)" },
-            { "toolbar.forward", "前进 (Alt+右)" },
-            { "toolbar.reload", "刷新 (F5)" },
-            { "toolbar.home", "回到起始地址" },
-            { "toolbar.zoomout", "缩小 (Ctrl+-)" },
-            { "toolbar.zoomin", "放大 (Ctrl++)" },
-            { "toolbar.more", "更多" },
 
             // ---- close prompt ----
             { "close.title", "关闭 DSHView" },
@@ -123,17 +115,11 @@ namespace DshView
             { "settings.runtime.hint", "自带内核无需在目标机安装 WebView2" },
             { "settings.runtime.bundled", "自带 webview2" },
             { "settings.runtime.system", "系统已安装" },
-            { "settings.secureorigin", "内网 http 视为安全上下文" },
-            { "settings.secureorigin.hint", "剪贴板 API 需要；套了 HTTPS 可关掉" },
             { "settings.icon", "窗口图标" },
             { "settings.icon.default", "官方图标" },
             { "settings.icon.auto", "跟随系统主题" },
             { "settings.icon.light", "黑鲸" },
             { "settings.icon.dark", "白鲸" },
-            { "settings.zoom", "初始缩放" },
-            { "settings.zoom.hint", "下次启动生效" },
-            { "settings.toolbar", "显示地址栏" },
-            { "settings.toolbar.hint", "默认纯内容窗口，开启后有前进/刷新/缩放按钮" },
             { "settings.closeaction", "关闭按钮" },
             { "settings.closeaction.hint", "询问框里勾选「记住我的选择」也会改写这项" },
             { "settings.closeaction.ask", "每次询问" },
@@ -143,14 +129,9 @@ namespace DshView
             { "settings.args.hint", "空格分隔，通常留空；排查时可用 --no-sandbox" },
             { "settings.data", "浏览器数据目录" },
             { "settings.data.hint", "保存 cookie 与登录态，删掉等于清空登录" },
-            { "settings.lang", "界面语言" },
-            { "settings.lang.hint", "跟随 DSH 网页的语言（读取页面的 html lang）" },
-            { "settings.lang.auto", "跟随 DSH 网页" },
-            { "settings.lang.zh", "中文" },
-            { "settings.lang.en", "English" },
             { "settings.save", "保存" },
             { "settings.saverestart", "保存并重启" },
-            { "settings.restartnote", "地址 / 内核 / 数据目录 / 缩放改动需要重启才生效。" },
+            { "settings.restartnote", "地址 / 内核 / 数据目录改动需要重启才生效。" },
             { "settings.savefailed", "配置写入失败，详见 dshview.log。" },
 
             // ---- about ----
@@ -182,13 +163,6 @@ namespace DshView
             { "tray.browser", "Open in system browser" },
             { "tray.quit", "Quit" },
             { "tray.hint", "Minimized to the tray. Double-click the icon to restore, right-click for the menu." },
-            { "toolbar.back", "Back (Alt+Left)" },
-            { "toolbar.forward", "Forward (Alt+Right)" },
-            { "toolbar.reload", "Reload (F5)" },
-            { "toolbar.home", "Go to the start address" },
-            { "toolbar.zoomout", "Zoom out (Ctrl+-)" },
-            { "toolbar.zoomin", "Zoom in (Ctrl++)" },
-            { "toolbar.more", "More" },
 
             // ---- close prompt ----
             { "close.title", "Close DSHView" },
@@ -232,17 +206,11 @@ namespace DshView
             { "settings.runtime.hint", "The bundled runtime needs no WebView2 on the target machine" },
             { "settings.runtime.bundled", "Bundled webview2" },
             { "settings.runtime.system", "Installed on this machine" },
-            { "settings.secureorigin", "Treat intranet http as a secure context" },
-            { "settings.secureorigin.hint", "Needed for the clipboard API; turn off when served over HTTPS" },
             { "settings.icon", "Window icon" },
             { "settings.icon.default", "Official artwork" },
             { "settings.icon.auto", "Follow system theme" },
             { "settings.icon.light", "Dark whale" },
             { "settings.icon.dark", "White whale" },
-            { "settings.zoom", "Initial zoom" },
-            { "settings.zoom.hint", "Applies on the next launch" },
-            { "settings.toolbar", "Show the address bar" },
-            { "settings.toolbar.hint", "Default is a content-only window; enables back/reload/zoom buttons" },
             { "settings.closeaction", "Close button" },
             { "settings.closeaction.hint", "\"Remember my choice\" in the prompt writes this too" },
             { "settings.closeaction.ask", "Ask every time" },
@@ -252,14 +220,9 @@ namespace DshView
             { "settings.args.hint", "Space separated, usually empty; --no-sandbox helps when diagnosing" },
             { "settings.data", "Browser data directory" },
             { "settings.data.hint", "Holds cookies and login state; deleting it clears the login" },
-            { "settings.lang", "UI language" },
-            { "settings.lang.hint", "Follows the DSH web UI by reading the page's html lang" },
-            { "settings.lang.auto", "Follow DSH web" },
-            { "settings.lang.zh", "中文" },
-            { "settings.lang.en", "English" },
             { "settings.save", "Save" },
             { "settings.saverestart", "Save and restart" },
-            { "settings.restartnote", "Address / runtime / data directory / zoom changes apply after a restart." },
+            { "settings.restartnote", "Address / runtime / data directory changes apply after a restart." },
             { "settings.savefailed", "Could not write the config file; see dshview.log." },
 
             // ---- about ----

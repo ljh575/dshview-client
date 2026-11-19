@@ -31,12 +31,8 @@ namespace DshView
         public string Url = "http://127.0.0.1:3080/";
         public string Runtime = "webview2";   // folder next to the exe; "system" => installed runtime
         public string Data = "profile";
-        public double Zoom = 1.0;
         public string ExtraArgs = "";
-        public bool SecureOrigin = true;      // promote a plain-http LAN origin to a secure context
-        public bool Toolbar = false;          // DSH-Portable style: content only, no chrome
         public string Icon = "default";       // default | auto | light | dark
-        public string UiLang = "auto";        // auto (follow dsh web) | zh | en
         public bool CloseToTray = false;      // legacy: closetotray=, folded into CloseAction by Parse
         public string CloseAction = "ask";    // ask (prompt) | tray (hide) | quit (exit)
         public bool SelfTest = false;
@@ -67,14 +63,10 @@ namespace DshView
                             case "url": s.Url = val; break;
                             case "runtime": s.Runtime = val; break;
                             case "data": s.Data = val; break;
-                            case "zoom": s.Zoom = ParseDouble(val, 1.0); break;
                             case "args": s.ExtraArgs = val; break;
-                            case "toolbar": s.Toolbar = IsTrue(val); break;
                             case "icon": s.Icon = val; break;
-                            case "lang": s.UiLang = NormalizeLang(val); break;
                             case "closetotray": s.CloseToTray = IsTrue(val); s._legacyTraySeen = true; break;
                             case "closeaction": s.CloseAction = NormalizeCloseAction(val); s._closeActionSeen = true; break;
-                            case "secureorigin": s.SecureOrigin = IsTrue(val); break;
                         }
                     }
                 }
@@ -86,17 +78,14 @@ namespace DshView
                 {
                     if (a == "--selftest") { s.SelfTest = true; continue; }
                     if (a == "--bare") { s.Bare = true; continue; }
-                    if (a == "--toolbar") { s.Toolbar = true; continue; }
                     if (a == "--closetotray") { s.CloseToTray = true; s._legacyTraySeen = true; continue; }
                     if (a.StartsWith("--closeaction=")) { s.CloseAction = NormalizeCloseAction(a.Substring(14)); s._closeActionSeen = true; continue; }
                     if (a.StartsWith("--closetotray=")) { s.CloseToTray = IsTrue(a.Substring(14)); s._legacyTraySeen = true; continue; }
                     if (a.StartsWith("--url=")) s.Url = a.Substring(6);
                     else if (a.StartsWith("--runtime=")) s.Runtime = a.Substring(10);
                     else if (a.StartsWith("--data=")) s.Data = a.Substring(7);
-                    else if (a.StartsWith("--zoom=")) s.Zoom = ParseDouble(a.Substring(7), 1.0);
                     else if (a.StartsWith("--args=")) s.ExtraArgs = a.Substring(7);
                     else if (a.StartsWith("--icon=")) s.Icon = a.Substring(7);
-                    else if (a.StartsWith("--lang=")) s.UiLang = NormalizeLang(a.Substring(7));
                 }
             }
             // closeaction wins when it is written down. Otherwise an older
@@ -113,25 +102,10 @@ namespace DshView
             return "ask";
         }
 
-        // auto = follow the dsh web UI; anything else pins a language.
-        private static string NormalizeLang(string v)
-        {
-            v = (v ?? "").Trim().ToLowerInvariant();
-            if (v == "zh" || v == "en" || v == "auto") return v;
-            return "auto";
-        }
-
         private static bool IsTrue(string v)
         {
             v = (v ?? "").Trim().ToLowerInvariant();
             return v == "1" || v == "true" || v == "yes" || v == "on";
-        }
-
-        private static double ParseDouble(string v, double fallback)
-        {
-            double d;
-            if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out d)) return d;
-            return fallback;
         }
     }
 
@@ -197,13 +171,6 @@ namespace DshView
                 sb.AppendLine("# 浏览器数据目录：保存 token 与登录 cookie。删掉它等于清空登录状态。");
                 sb.AppendLine("data=profile");
                 sb.AppendLine();
-                sb.AppendLine("# Initial zoom factor / 初始缩放比例");
-                sb.AppendLine("zoom=1.0");
-                sb.AppendLine();
-                sb.AppendLine("# Address bar: 0 = content-only window (default, like DSH-Portable), 1 = show chrome");
-                sb.AppendLine("# 是否显示地址栏：0 = 纯内容窗口（默认）；1 = 带地址栏与前进/后退/缩放");
-                sb.AppendLine("toolbar=0");
-                sb.AppendLine();
                 sb.AppendLine("# Icon style / 图标样式 (four values):");
                 sb.AppendLine("#   default = official DSH artwork (default; readable on light and dark frames)");
                 sb.AppendLine("#             DSH 官方图标，带圆角底，浅色/深色背景都看得清");
@@ -214,12 +181,6 @@ namespace DshView
                 sb.AppendLine("#   dark    = always the white whale (for a dark title bar)");
                 sb.AppendLine("#             始终白鲸，适合深色标题栏");
                 sb.AppendLine("icon=default");
-                sb.AppendLine();
-                sb.AppendLine("# UI language of DSHView's own menus and dialogs / 本程序菜单与对话框的语言:");
-                sb.AppendLine("#   auto = follow the dsh web UI (reads the page's html lang) / 跟随 dsh web 的语言");
-                sb.AppendLine("#   zh   = always Chinese / 始终中文");
-                sb.AppendLine("#   en   = always English / 始终英文");
-                sb.AppendLine("lang=auto");
                 sb.AppendLine();
                 sb.AppendLine("# Close button: ask | tray | quit");
                 sb.AppendLine("#   ask  = prompt every time (default); the prompt has a \"remember my");
@@ -240,10 +201,6 @@ namespace DshView
                 sb.AppendLine("# to diagnose. 若安全软件拦截 Chromium 沙箱 IPC，可临时加 --no-sandbox 定位。");
                 sb.AppendLine("args=");
                 sb.AppendLine();
-                sb.AppendLine("# Promote an intranet http origin to a secure context so navigator.clipboard");
-                sb.AppendLine("# works. Set to 0 when serving over HTTPS.");
-                sb.AppendLine("# 把内网 http 地址提升为安全上下文，否则剪贴板 API 不可用；套了 HTTPS 可设 0。");
-                sb.AppendLine("secureorigin=1");
                 File.WriteAllText(IniPath, sb.ToString(), new UTF8Encoding(false));
                 Log("created default ini: " + IniPath);
             }
@@ -355,25 +312,21 @@ namespace DshView
                 parts.Add("--no-default-browser-check");
                 parts.Add("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection");
             }
-            if (s.SecureOrigin)
-            {
-                string origin = OriginOf(s.Url);
-                if (origin != null) parts.Add("--unsafely-treat-insecure-origin-as-secure=" + origin);
-            }
+            // Always promote a plain-http LAN origin to a secure context so the
+            // clipboard API and other secure-only features work on the intranet.
+            string origin = OriginOf(s.Url);
+            if (origin != null) parts.Add("--unsafely-treat-insecure-origin-as-secure=" + origin);
             // The Chromium UI locale defaults to en-US and never reads the Windows
-            // language on its own, so set --lang explicitly: zh/en pin the locale,
-            // auto follows the OS UI language. This is what localizes the native
-            // context menu (startup-only; it cannot switch at runtime).
-            string langArg = ChromiumLang(s.UiLang);
+            // language on its own, so set --lang to the OS UI language. This is what
+            // localizes the native context menu (startup-only; cannot switch at runtime).
+            string langArg = OsUiLanguage();
             if (langArg != null) parts.Add("--lang=" + langArg);
             if (!string.IsNullOrWhiteSpace(s.ExtraArgs)) parts.Add(s.ExtraArgs.Trim());
             return string.Join(" ", parts.ToArray());
         }
 
-        private static string ChromiumLang(string uiLang)
+        private static string OsUiLanguage()
         {
-            if (uiLang == "zh") return "zh-CN";
-            if (uiLang == "en") return "en-US";
             try
             {
                 string os = CultureInfo.CurrentUICulture.Name;
@@ -400,10 +353,6 @@ namespace DshView
     {
         private readonly Settings _s;
         private WebView2 _view;
-        private Panel _bar;
-        private TextBox _address;
-        private Button _back, _forward, _reload, _home, _zoomOut, _zoomIn, _gear, _menu;
-        private Label _zoomLabel;
         private System.Windows.Forms.Timer _selfTestTimer;
         private bool _finished;
         private bool _failureShown;
@@ -426,9 +375,9 @@ namespace DshView
         {
             _s = settings;
             Text = "DSHView";
-            // auto follows the page and starts on the built-in default until the
-            // first successful load tells us better.
-            Lang.Current = (_s.UiLang == "zh" || _s.UiLang == "en") ? _s.UiLang : "zh";
+            // Language always follows the dsh web UI; it starts on the built-in
+            // default (Chinese) until the first successful load tells us better.
+            Lang.Current = "zh";
             StartPosition = FormStartPosition.CenterScreen;
             Size = new Size(1180, 820);
             MinimumSize = new Size(560, 420);
@@ -442,11 +391,9 @@ namespace DshView
             LoadLayout();
             BuildShell();
             BuildTitleBar();
-            // The tray is created even when closing quits outright: with toolbar=0
-            // it is the only surface for settings/about, so it must always exist.
+            // The tray carries settings/about and is the only menu surface, so it
+            // always exists (even when closing quits outright).
             if (!_s.SelfTest) SetupTray();
-
-            if (_s.Toolbar) BuildToolbar();
 
             _view = new WebView2();
             _view.Dock = DockStyle.Fill;
@@ -456,7 +403,6 @@ namespace DshView
 
             Shown += delegate
             {
-                if (_bar != null) LayoutBar(_bar);
                 // Defer until the window is fully shown: the WebView2 controller needs
                 // a live parent HWND, and creating it during Load races with layout.
                 BeginInvoke((MethodInvoker)delegate { BeginInit(); });
@@ -474,7 +420,7 @@ namespace DshView
             return _dark ? Color.FromArgb(60, 60, 60) : Color.FromArgb(200, 200, 200);
         }
 
-        // The shell holds everything (title bar, toolbar, webview) and is inset by
+        // The shell holds everything (title bar, webview) and is inset by
         // one pixel so the form's own background shows through as a thin gray border.
         private void BuildShell()
         {
@@ -592,72 +538,13 @@ namespace DshView
             WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
         }
 
-        private void BuildToolbar()
-        {
-            _bar = new Panel();
-            _bar.Dock = DockStyle.Top;
-            _bar.Height = 40;
-            _bar.BackColor = Color.FromArgb(246, 247, 249);
-            _shell.Controls.Add(_bar);
-
-            _back = MakeButton("\u2190", Lang.T("toolbar.back"));
-            _forward = MakeButton("\u2192", Lang.T("toolbar.forward"));
-            _reload = MakeButton("\u27F3", Lang.T("toolbar.reload"));
-            _home = MakeButton("\u2302", Lang.T("toolbar.home"));
-            _zoomOut = MakeButton("\u2212", Lang.T("toolbar.zoomout"));
-            _zoomIn = MakeButton("+", Lang.T("toolbar.zoomin"));
-            _gear = MakeButton("\u2699", Lang.T("tray.settings"));
-            _menu = MakeButton("\u22EF", Lang.T("toolbar.more"));
-
-            _back.Click += delegate { GoBack(); };
-            _forward.Click += delegate { GoForward(); };
-            _reload.Click += delegate { Reload(); };
-            _home.Click += delegate { Navigate(_s.Url); };
-            _zoomOut.Click += delegate { SetZoom(-0.1); };
-            _zoomIn.Click += delegate { SetZoom(0.1); };
-            _gear.Click += delegate { OpenSettings(); };
-            _menu.Click += delegate(object sender, EventArgs e) { ShowMenu(_menu); };
-
-            _address = new TextBox();
-            _address.BorderStyle = BorderStyle.FixedSingle;
-            _address.Font = new Font("Segoe UI", 9.5f);
-            _address.BackColor = Color.White;
-            _address.KeyDown += delegate(object sender, KeyEventArgs e)
-            {
-                if (e.KeyCode == Keys.Enter)
-                {
-                    e.SuppressKeyPress = true;
-                    Navigate(_address.Text.Trim());
-                }
-            };
-
-            _zoomLabel = new Label();
-            _zoomLabel.Text = "100%";
-            _zoomLabel.TextAlign = ContentAlignment.MiddleCenter;
-            _zoomLabel.Font = new Font("Segoe UI", 8.5f);
-            _zoomLabel.BackColor = Color.Transparent;
-
-            _bar.Controls.Add(_back);
-            _bar.Controls.Add(_forward);
-            _bar.Controls.Add(_reload);
-            _bar.Controls.Add(_home);
-            _bar.Controls.Add(_address);
-            _bar.Controls.Add(_zoomOut);
-            _bar.Controls.Add(_zoomLabel);
-            _bar.Controls.Add(_zoomIn);
-            _bar.Controls.Add(_gear);
-            _bar.Controls.Add(_menu);
-            _bar.Resize += delegate { LayoutBar(_bar); };
-        }
-
         // The tray icon keeps the process alive with no window and no taskbar
         // button (a hidden top-level window drops out of the taskbar by itself,
         // so ShowInTaskbar is left alone -- toggling it would recreate the HWND
         // and tear down the WebView2 controller).
         //
-        // It is also the only menu surface when toolbar=0, so it carries the
-        // settings/about entries and the items that used to live in the ...
-        // menu. Rebuilt whenever the UI language changes.
+        // It is the only menu surface, so it carries the settings/about entries
+        // and the utility items. Rebuilt whenever the UI language changes.
         private void SetupTray()
         {
             _tray = new NotifyIcon();
@@ -868,47 +755,6 @@ namespace DshView
                 App.Log("closeaction=" + action + " not saved; applies to this session only");
         }
 
-        private Button MakeButton(string text, string tip)
-        {
-            Button b = new Button();
-            b.Text = text;
-            b.FlatStyle = FlatStyle.Flat;
-            b.FlatAppearance.BorderSize = 0;
-            b.BackColor = Color.Transparent;
-            b.Font = new Font("Segoe UI", 11f);
-            b.TabStop = false;
-            new ToolTip().SetToolTip(b, tip);
-            return b;
-        }
-
-        private void LayoutBar(Panel bar)
-        {
-            int h = 28, top = 6, x = 6;
-            int right = bar.Width - 6;
-            if (right < 500) return;
-
-            int menuX = right - 32;
-            int gearX = menuX - 32;
-            int zoomInX = gearX - 32;
-            int zoomLabelX = zoomInX - 46;
-            int zoomOutX = zoomLabelX - 32;
-
-            _back.SetBounds(x, top, 32, h); x += 34;
-            _forward.SetBounds(x, top, 32, h); x += 34;
-            _reload.SetBounds(x, top, 32, h); x += 34;
-            _home.SetBounds(x, top, 32, h); x += 40;
-
-            int width = zoomOutX - x - 8;
-            if (width < 80) width = 80;
-            _address.SetBounds(x, top, width, h);
-
-            _zoomOut.SetBounds(zoomOutX, top, 32, h);
-            _zoomLabel.SetBounds(zoomLabelX, top, 46, h);
-            _zoomIn.SetBounds(zoomInX, top, 32, h);
-            _gear.SetBounds(gearX, top, 32, h);
-            _menu.SetBounds(menuX, top, 32, h);
-        }
-
         private async void BeginInit()
         {
             string runtime = App.ResolveRuntime(_s.Runtime);
@@ -995,15 +841,9 @@ namespace DshView
 
             core.NavigationStarting += delegate(object sender, CoreWebView2NavigationStartingEventArgs e)
             {
-                if (_address != null) _address.Text = e.Uri;
-                if (_reload != null) _reload.Text = "\u2715";
             };
             core.NavigationCompleted += delegate(object sender, CoreWebView2NavigationCompletedEventArgs e)
             {
-                if (_reload != null) _reload.Text = "\u27F3";
-                if (_back != null) _back.Enabled = core.CanGoBack;
-                if (_forward != null) _forward.Enabled = core.CanGoForward;
-                try { if (_address != null) _address.Text = core.Source; } catch { }
                 App.Log("nav " + (e.IsSuccess ? "ok" : "fail:" + e.WebErrorStatus) + " " + (core.Source ?? ""));
                 if (!e.IsSuccess && !_s.SelfTest) ShowLoadFailure(e.WebErrorStatus);
                 if (e.IsSuccess) SchedulePageProbes();
@@ -1036,12 +876,6 @@ namespace DshView
                     MessageBox.Show(this, Lang.T("msg.processfail.body"), Lang.T("app.name"), MessageBoxButtons.OK, MessageBoxIcon.Error);
             };
 
-            if (_s.Zoom > 0.3 && _s.Zoom < 3.0)
-            {
-                _view.ZoomFactor = _s.Zoom;
-                if (_zoomLabel != null) _zoomLabel.Text = Math.Round(_s.Zoom * 100).ToString(CultureInfo.InvariantCulture) + "%";
-            }
-
             if (_s.SelfTest)
             {
                 _selfTestTimer = new System.Windows.Forms.Timer();
@@ -1053,23 +887,13 @@ namespace DshView
             Navigate(_s.Url);
         }
 
-        // No toolbar means no place to fix a wrong token, so surface the file to edit.
+        // There is no inline place to fix a wrong token, so surface the file to edit.
         private void ShowLoadFailure(CoreWebView2WebErrorStatus status)
         {
             if (_failureShown) return;
             _failureShown = true;
             string message = Lang.F("msg.loadfail.body", _s.Url, App.IniPath);
             MessageBox.Show(this, message, Lang.T("msg.loadfail.title"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-
-        private void GoBack()
-        {
-            try { if (_view.CoreWebView2.CanGoBack) _view.CoreWebView2.GoBack(); } catch { }
-        }
-
-        private void GoForward()
-        {
-            try { if (_view.CoreWebView2.CanGoForward) _view.CoreWebView2.GoForward(); } catch { }
         }
 
         private bool IsSameOrigin(string url)
@@ -1145,24 +969,8 @@ namespace DshView
         private void OnKeyDown(object sender, KeyEventArgs e)
         {
             if (e.Control && e.KeyCode == Keys.R) { Reload(); e.SuppressKeyPress = true; }
-            else if (e.Control && (e.KeyCode == Keys.Oemplus || e.KeyCode == Keys.Add)) { SetZoom(0.1); e.SuppressKeyPress = true; }
-            else if (e.Control && (e.KeyCode == Keys.OemMinus || e.KeyCode == Keys.Subtract)) { SetZoom(-0.1); e.SuppressKeyPress = true; }
-            else if (e.Control && e.KeyCode == Keys.D0) { SetZoomAbsolute(1.0); e.SuppressKeyPress = true; }
             else if (e.KeyCode == Keys.F5) { Reload(); e.SuppressKeyPress = true; }
             else if (e.KeyCode == Keys.F12) { OpenDevTools(); e.SuppressKeyPress = true; }
-            else if (_address != null && e.Control && e.KeyCode == Keys.L) { _address.Focus(); _address.SelectAll(); e.SuppressKeyPress = true; }
-        }
-
-        private void ShowMenu(Button anchor)
-        {
-            ContextMenuStrip menu = new ContextMenuStrip();
-            menu.Items.Add(Lang.T("tray.settings"), null, delegate { OpenSettings(); });
-            menu.Items.Add(Lang.T("tray.about"), null, delegate { OpenAbout(); });
-            menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add(Lang.T("tray.copyurl"), null, delegate { try { Clipboard.SetText(CurrentUrl()); } catch { } });
-            menu.Items.Add(Lang.T("tray.devtools"), null, delegate { OpenDevTools(); });
-            menu.Items.Add(Lang.T("tray.browser"), null, delegate { try { Process.Start(CurrentUrl()); } catch { } });
-            menu.Show(anchor, new Point(0, anchor.Height));
         }
 
         private void OpenSettings()
@@ -1186,7 +994,6 @@ namespace DshView
         {
             _s.Url = updated.Url;
             _s.CloseAction = updated.CloseAction;
-            _s.UiLang = updated.UiLang;
 
             if (_s.Icon != updated.Icon)
             {
@@ -1200,13 +1007,8 @@ namespace DshView
                 catch (Exception ex) { App.Log("icon apply failed: " + ex.Message); }
             }
 
-            // zoom / toolbar / runtime / data / args / secureorigin need a restart,
-            // which the dialog already tells the user and offers to do.
-            if (updated.UiLang == "zh" || updated.UiLang == "en")
-            {
-                Lang.Current = updated.UiLang;
-                BuildTrayMenu();
-            }
+            // runtime / data / args need a restart, which the dialog already tells
+            // the user and offers to do.
         }
 
         private void OpenAbout()
@@ -1247,7 +1049,6 @@ namespace DshView
         // load and whenever the injected observer reports a change.
         private async void DetectLanguage()
         {
-            if (_s.UiLang != "auto") return;
             try
             {
                 CoreWebView2 core = _view.CoreWebView2;
@@ -1385,23 +1186,6 @@ namespace DshView
                 _view.CoreWebView2.Navigate(url);
             }
             catch (Exception ex) { App.Log("navigate failed: " + ex.Message); }
-        }
-
-        private void SetZoom(double delta)
-        {
-            if (_view == null) return;
-            double z = _view.ZoomFactor + delta;
-            if (z < 0.5) z = 0.5;
-            if (z > 2.0) z = 2.0;
-            _view.ZoomFactor = z;
-            if (_zoomLabel != null) _zoomLabel.Text = Math.Round(z * 100).ToString(CultureInfo.InvariantCulture) + "%";
-        }
-
-        private void SetZoomAbsolute(double z)
-        {
-            if (_view == null) return;
-            _view.ZoomFactor = z;
-            if (_zoomLabel != null) _zoomLabel.Text = Math.Round(z * 100).ToString(CultureInfo.InvariantCulture) + "%";
         }
 
         private void SpawnChild(string url)

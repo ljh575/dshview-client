@@ -27,14 +27,10 @@ namespace DshView
 
         private readonly TextBox _url = new TextBox();
         private readonly ComboBox _runtime = new ComboBox();
-        private readonly CheckBox _secureOrigin = new CheckBox();
         private readonly ComboBox _icon = new ComboBox();
-        private readonly ComboBox _zoom = new ComboBox();
-        private readonly CheckBox _toolbar = new CheckBox();
         private readonly ComboBox _closeAction = new ComboBox();
         private readonly TextBox _args = new TextBox();
         private readonly TextBox _data = new TextBox();
-        private readonly ComboBox _lang = new ComboBox();
 
         private int _y;
 
@@ -88,16 +84,12 @@ namespace DshView
             Section("settings.section.connection");
             Row("settings.url", "settings.url.hint", _url);
             Combo("settings.runtime", "settings.runtime.hint", _runtime);
-            Check("settings.secureorigin", "settings.secureorigin.hint", _secureOrigin);
 
             Section("settings.section.appearance");
             Combo("settings.icon", null, _icon);
-            Combo("settings.zoom", "settings.zoom.hint", _zoom);
-            Check("settings.toolbar", "settings.toolbar.hint", _toolbar);
 
             Section("settings.section.behavior");
             Combo("settings.closeaction", "settings.closeaction.hint", _closeAction);
-            Combo("settings.lang", "settings.lang.hint", _lang);
 
             Section("settings.section.advanced");
             Row("settings.args", "settings.args.hint", _args);
@@ -219,19 +211,9 @@ namespace DshView
             _runtime.Items.Add(Lang.T("settings.runtime.system"));
             _runtime.SelectedIndex = (s.Runtime == "system") ? 1 : 0;
 
-            _secureOrigin.Checked = s.SecureOrigin;
-
             string[] icons = { "default", "auto", "light", "dark" };
             for (int i = 0; i < icons.Length; i++) _icon.Items.Add(Lang.T("settings.icon." + icons[i]));
             _icon.SelectedIndex = Array.IndexOf(icons, s.Icon) < 0 ? 0 : Array.IndexOf(icons, s.Icon);
-
-            string[] zooms = { "0.8", "0.9", "1.0", "1.1", "1.25", "1.5", "2.0" };
-            for (int i = 0; i < zooms.Length; i++) _zoom.Items.Add(zooms[i] + "×");
-            string current = s.Zoom.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
-            int idx = Array.IndexOf(zooms, current);
-            _zoom.SelectedIndex = idx < 0 ? 2 : idx;
-
-            _toolbar.Checked = s.Toolbar;
 
             string[] actions = { "ask", "tray", "quit" };
             for (int i = 0; i < actions.Length; i++) _closeAction.Items.Add(Lang.T("settings.closeaction." + actions[i]));
@@ -240,44 +222,28 @@ namespace DshView
 
             _args.Text = s.ExtraArgs ?? "";
             _data.Text = s.Data ?? "";
-
-            string[] langs = { "auto", "zh", "en" };
-            for (int i = 0; i < langs.Length; i++) _lang.Items.Add(Lang.T("settings.lang." + langs[i]));
-            int l = Array.IndexOf(langs, s.UiLang);
-            _lang.SelectedIndex = l < 0 ? 0 : l;
         }
 
         private void Commit(bool restart)
         {
             string[] icons = { "default", "auto", "light", "dark" };
-            string[] zooms = { "0.8", "0.9", "1.0", "1.1", "1.25", "1.5", "2.0" };
             string[] actions = { "ask", "tray", "quit" };
-            string[] langs = { "auto", "zh", "en" };
 
             Settings s = new Settings();
             s.Url = _url.Text.Trim();
             s.Runtime = _runtime.SelectedIndex == 1 ? "system" : "webview2";
-            s.SecureOrigin = _secureOrigin.Checked;
             s.Icon = icons[_icon.SelectedIndex < 0 ? 0 : _icon.SelectedIndex];
-            s.Zoom = double.Parse(zooms[_zoom.SelectedIndex < 0 ? 2 : _zoom.SelectedIndex],
-                System.Globalization.CultureInfo.InvariantCulture);
-            s.Toolbar = _toolbar.Checked;
             s.CloseAction = actions[_closeAction.SelectedIndex < 0 ? 0 : _closeAction.SelectedIndex];
             s.ExtraArgs = _args.Text.Trim();
             s.Data = _data.Text.Trim();
-            s.UiLang = langs[_lang.SelectedIndex < 0 ? 0 : _lang.SelectedIndex];
 
             int written = 0;
             if (s.Url != _original.Url) written += Save("url", s.Url);
             if (s.Runtime != _original.Runtime) written += Save("runtime", s.Runtime);
             if (s.Data != _original.Data) written += Save("data", s.Data);
-            if (Math.Abs(s.Zoom - _original.Zoom) > 0.0001) written += Save("zoom", zooms[_zoom.SelectedIndex]);
             if (s.ExtraArgs != _original.ExtraArgs) written += Save("args", s.ExtraArgs);
-            if (s.Toolbar != _original.Toolbar) written += Save("toolbar", s.Toolbar ? "1" : "0");
             if (s.Icon != _original.Icon) written += Save("icon", s.Icon);
             if (s.CloseAction != _original.CloseAction) written += Save("closeaction", s.CloseAction);
-            if (s.SecureOrigin != _original.SecureOrigin) written += Save("secureorigin", s.SecureOrigin ? "1" : "0");
-            if (s.UiLang != _original.UiLang) written += Save("lang", s.UiLang);
 
             App.Log("settings: " + written + " value(s) written");
             Result = s;

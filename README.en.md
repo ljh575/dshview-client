@@ -17,7 +17,7 @@ DSHView's approach: **put Microsoft's official fixed-version WebView2 runtime in
 ## Features
 
 - **Zero install**: ships Chromium `157.0.4341.46` (fixed version); the target machine needs no WebView2 at all
-- **Content-only window**: no address bar or buttons by default (`toolbar=1` brings them back)
+- **Self-drawn title bar**: borderless window with a custom caption (whale icon and title on the left, minimize/maximize/close on the right), no address bar or toolbar
 - **Truly portable**: no registry writes, no service, nothing in system directories
 - **Low memory**: GPU and background networking are disabled; ~129MB private memory on an empty page
 - **Clipboard works**: intranet http origins are promoted to a secure context, so `navigator.clipboard` behaves
@@ -69,13 +69,9 @@ No Visual Studio, no .NET SDK, no NuGet client required. The build machine needs
 | `url` | `http://127.0.0.1:3080/` | DSH Web address; include `?token=...` on first use or after a port change |
 | `runtime` | `webview2` | bundled runtime; `system` uses the machine-installed WebView2 |
 | `data` | `profile` | browser data directory (cookies, login state); deleting it clears the login |
-| `zoom` | `1.0` | initial zoom |
-| `toolbar` | `0` | `1` shows the address bar, back/forward and zoom |
 | `icon` | `default` | `default` / `auto` / `light` / `dark` |
-| `lang` | `auto` | `auto` follows the dsh web UI / `zh` always Chinese / `en` always English |
 | `closeaction` | `ask` | `ask` prompts every time / `tray` always minimizes to the tray / `quit` always exits (the legacy `closetotray=1` still means `tray` when this key is absent) |
 | `args` | empty | extra Chromium flags |
-| `secureorigin` | `1` | promote http intranet origins to a secure context (needed for clipboard) |
 
 The file is recreated automatically when missing.
 
@@ -90,7 +86,7 @@ Four values for `icon`. Each row shows the same setting rendered **on a light ba
 | `light` | ![light](docs/ic-light.png) | Always the dark whale. Good on a light title bar; hard to see on a dark one |
 | `dark` | ![dark](docs/ic-dark.png) | Always the white whale. Good on a dark title bar; hard to see on a light one |
 
-The **static file icon** of the exe is always `default` (what Explorer shows); only the window and taskbar icon follow the setting.
+The **static file icon** of the exe is always `default` (what Explorer shows); the window/taskbar/tray icon follows `icon=`. The small whale in the title bar follows the **page dark/light theme** (white whale on a dark page, dark whale on a light page) and is independent of `icon=`.
 
 ## Closing and the tray
 
@@ -108,15 +104,15 @@ With the default `closeaction=ask`, closing the window **asks first**: minimize 
 
 ## Settings and about
 
-*Settings…* in the tray menu (or the gear on the right of the toolbar when `toolbar=1`):
+*Settings…* in the tray menu:
 
-- Sections: **Connection** (address, runtime, secure context) / **Appearance** (icon, zoom, address bar) / **Behaviour** (close button, UI language) / **Advanced** (extra Chromium arguments, data directory)
+- Sections: **Connection** (address, runtime) / **Appearance** (icon) / **Behaviour** (close button) / **Advanced** (extra Chromium arguments, data directory)
 - Footer: open config file · cancel · save · **save and restart**
-- Saving writes only the values that changed, in place, so comments and ordering survive. Address / runtime / data directory / zoom changes need a restart; the new process waits for the old one to exit, so two instances never race for the same `profile` directory
+- Saving writes only the values that changed, in place, so comments and ordering survive. Address / runtime / data directory changes need a restart; the new process waits for the old one to exit, so two instances never race for the same `profile` directory
 
 *About* shows the version, the WebView2 runtime and where it came from, the data directory, config file, log path, project URL and licence, with *Copy info* to paste into a ticket.
 
-**UI language**: with `lang=auto` (the default) menus and dialogs follow the dsh web UI by reading `document.documentElement.lang` (the dsh client mirrors its active locale there; Chinese is `zh-CN`). Switching the language inside dsh web takes effect **immediately, with no reload**: an observer injected into the page watches `<html lang>` and the theme attributes and tells the host to re-read, and a few probes at 0/600/1200 ms after each load cover the late arrival of the dsh settings scope. `lang=zh` or `lang=en` pins one.
+**UI language**: menus and dialogs always follow the dsh web UI by reading `document.documentElement.lang` (the dsh client mirrors its active locale there; Chinese is `zh-CN`). Switching the language inside dsh web takes effect **immediately, with no reload**: an observer injected into the page watches `<html lang>` and the theme attributes and tells the host to re-read, and a few probes at 0/600/1200 ms after each load cover the late arrival of the dsh settings scope.
 
 ## About tokens
 
@@ -186,7 +182,7 @@ This writes `selftest-result.json`; `"ok":true` with `"version":"157.0.4341.46"`
 ## Layout
 
 ```
-src/Program.cs        main program (WinForms + WebView2, C# 5, single file)
+src/*.cs             main program source (WinForms + WebView2, C# 5)
 src/*.ico             three icon sets
 src/Icon*.cs          icon generation helpers (not part of the main build)
 src/IcoExtract.cs     extracts RT_GROUP_ICON from a PE verbatim
