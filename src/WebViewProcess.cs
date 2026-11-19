@@ -18,8 +18,8 @@ namespace DshView
                 try
                 {
                     Process browser = Process.GetProcessById((int)browserProcessId);
-                    if (browser.WaitForExit(3000)) App.Log("browser process exited: " + browserProcessId);
-                    else App.Log("browser process still running after 3s: " + browserProcessId);
+                    if (browser.WaitForExit(800)) App.Log("browser process exited: " + browserProcessId);
+                    else App.Log("browser process still running after 800ms: " + browserProcessId + " (reaping)");
                 }
                 catch (ArgumentException)
                 {
@@ -46,7 +46,7 @@ namespace DshView
                 {
                     if (ParentProcessId(candidate) != self) continue;
                     candidate.Kill();
-                    candidate.WaitForExit(2000);
+                    candidate.WaitForExit(200);
                     reaped++;
                 }
                 catch (Exception ex)

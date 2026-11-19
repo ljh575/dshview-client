@@ -18,6 +18,7 @@ using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using Microsoft.Win32;
 using Microsoft.Web.WebView2.Core;
@@ -359,8 +360,27 @@ namespace DshView
                 string origin = OriginOf(s.Url);
                 if (origin != null) parts.Add("--unsafely-treat-insecure-origin-as-secure=" + origin);
             }
+            // The Chromium UI locale defaults to en-US and never reads the Windows
+            // language on its own, so set --lang explicitly: zh/en pin the locale,
+            // auto follows the OS UI language. This is what localizes the native
+            // context menu (startup-only; it cannot switch at runtime).
+            string langArg = ChromiumLang(s.UiLang);
+            if (langArg != null) parts.Add("--lang=" + langArg);
             if (!string.IsNullOrWhiteSpace(s.ExtraArgs)) parts.Add(s.ExtraArgs.Trim());
             return string.Join(" ", parts.ToArray());
+        }
+
+        private static string ChromiumLang(string uiLang)
+        {
+            if (uiLang == "zh") return "zh-CN";
+            if (uiLang == "en") return "en-US";
+            try
+            {
+                string os = CultureInfo.CurrentUICulture.Name;
+                if (!string.IsNullOrWhiteSpace(os)) return os;
+            }
+            catch { }
+            return "en-US";
         }
 
         public static string OriginOf(string url)
@@ -398,6 +418,7 @@ namespace DshView
         private Panel _shell;
         private Panel _title;
         private Label _titleText;
+        private PictureBox _titleIcon;
         private ChromeButton _btnMin, _btnMax, _btnClose;
         private bool _dark;
 
@@ -479,18 +500,33 @@ namespace DshView
             _title = new Panel { Dock = DockStyle.Top, Height = 32, BackColor = Color.White };
             _shell.Controls.Add(_title);
 
+            _titleIcon = new PictureBox
+            {
+                Dock = DockStyle.Left,
+                Width = 26,
+                SizeMode = PictureBoxSizeMode.CenterImage,
+                BackColor = Color.Transparent,
+            };
+
             _titleText = new Label
             {
                 Text = Lang.T("app.name"),
                 AutoSize = false,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(11, 0, 0, 0),
+                Padding = new Padding(2, 0, 0, 0),
                 Font = new Font("Segoe UI", 9f),
                 BackColor = Color.Transparent,
                 ForeColor = Color.Black,
             };
+
+            // Dock order is reverse z-order, so the Fill caption must be added FIRST
+            // (lowest z-order): it then docks last and fills the space left after the
+            // icon and the buttons. Adding it after the icon made it fill first and
+            // overlap the icon.
             _title.Controls.Add(_titleText);
+            _title.Controls.Add(_titleIcon);
+            ApplyTitleIcon();
 
             _btnClose = new ChromeButton("\u2715") { IsClose = true, Dock = DockStyle.Right, Width = 46 };
             _btnMax = new ChromeButton("\u25A1") { Dock = DockStyle.Right, Width = 46 };
@@ -511,8 +547,44 @@ namespace DshView
             };
             _title.MouseDown += drag;
             _titleText.MouseDown += drag;
+            _titleIcon.MouseDown += drag;
             _title.DoubleClick += delegate { ToggleMaximize(); };
             _titleText.DoubleClick += delegate { ToggleMaximize(); };
+            _titleIcon.DoubleClick += delegate { ToggleMaximize(); };
+        }
+
+        // Title bar whale icon: white whale on a dark page, dark whale on a light page.
+        private void ApplyTitleIcon()
+        {
+            if (_titleIcon == null) return;
+            try
+            {
+                Image old = _titleIcon.Image;
+                _titleIcon.Image = MakeTitleIcon(_dark);
+                if (old != null) old.Dispose();
+            }
+            catch { }
+        }
+
+        // Draws the whale icon into a fixed 16x16 bitmap. (Icon(Icon,16,16).ToBitmap()
+        // is not reliably 16x16 on .NET Framework, so draw it explicitly instead.)
+        private static Bitmap MakeTitleIcon(bool dark)
+        {
+            const int size = 16;
+            Bitmap bmp = new Bitmap(size, size);
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Color.Transparent);
+                Icon ic = null;
+                try { ic = App.PickThemeIcon(dark ? "dark" : "light"); } catch { }
+                if (ic != null)
+                {
+                    using (ic)
+                    using (Bitmap src = ic.ToBitmap())
+                        g.DrawImage(src, 0, 0, size, size);
+                }
+            }
+            return bmp;
         }
 
         private void ToggleMaximize()
@@ -702,6 +774,11 @@ namespace DshView
 
         private void Shutdown(string reason)
         {
+            // Hide first so the window disappears the instant the user asks; the
+            // teardown below waits for the browser process, which would otherwise
+            // look like a freeze behind a still-visible window.
+            try { Hide(); } catch { }
+            Application.DoEvents();
             TeardownWebView(reason);
             Application.Exit();
         }
@@ -934,11 +1011,12 @@ namespace DshView
             };
             core.DocumentTitleChanged += delegate
             {
-                // Keep a stable window identity in the alt-tab switcher and taskbar,
-                // and mirror the page title into the custom title bar.
-                string t = string.IsNullOrWhiteSpace(core.DocumentTitle) ? Lang.T("app.name") : core.DocumentTitle;
-                Text = t + " \u2014 DSHView";
-                if (_titleText != null) _titleText.Text = t;
+                // The dsh web title reads "<session> \u2014 DeepSeek Harness"; strip the
+                // app suffix and re-suffix with our own name, falling back to plain
+                // "DSHView" while the page still shows only "DeepSeek Harness".
+                string caption = MakeCaption(core.DocumentTitle);
+                Text = caption;
+                if (_titleText != null) _titleText.Text = caption;
             };
             core.PermissionRequested += delegate(object sender, CoreWebView2PermissionRequestedEventArgs e)
             {
@@ -1232,6 +1310,7 @@ namespace DshView
                 }
                 foreach (Control c in _title.Controls) if (c is ChromeButton) c.Invalidate();
             }
+            ApplyTitleIcon();
             if (_view != null) _view.DefaultBackgroundColor = shellBg;
         }
 
@@ -1240,6 +1319,21 @@ namespace DshView
             string v = (raw ?? "").Trim();
             if (v.Length >= 2 && v[0] == '"' && v[v.Length - 1] == '"') v = v.Substring(1, v.Length - 2);
             return v;
+        }
+
+        // Turns the page title into the caption by swapping the dsh web app suffix
+        // ("DeepSeek Harness") for our own, so "<session> \u2014 DeepSeek Harness"
+        // becomes "<session> \u2014 DSHView" and bare "DeepSeek Harness" becomes
+        // "DSHView". Case-insensitive via Regex because String.Replace is
+        // case-sensitive on .NET Framework.
+        private static string MakeCaption(string title)
+        {
+            string t = (title ?? "").Trim();
+            if (t.Length == 0) return "DSHView";
+            // Only the trailing app suffix ("<session> \u2014 DeepSeek Harness") is
+            // swapped; "$" anchors to the end so a session name that merely contains
+            // "DeepSeek Harness" is left alone.
+            return Regex.Replace(t, @"DeepSeek Harness\s*$", "DSHView", RegexOptions.IgnoreCase);
         }
 
         // Relaunches through --restartwait so the new process waits for this one

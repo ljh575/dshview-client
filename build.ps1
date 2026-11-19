@@ -49,12 +49,12 @@ $RuntimeVersion = '157.0.4341.46'
 $SdkVersion = '1.0.3967.48'
 $RuntimeMarker = "$RuntimeVersion.manifest"
 
-# The archive name carries the version, taken from its single source of truth,
-# so a folder holding several builds stays distinguishable by filename alone.
+# The archive name carries the full four-part version (1.2.1.n), taken from its
+# single source of truth. The fourth part is the build/test sequence number.
 $Version = $null
 $infoPath = Join-Path $ScriptRoot 'src/AssemblyInfo.cs'
 if (Test-Path $infoPath) {
-    $versionMatch = Select-String -Path $infoPath -Pattern 'AssemblyVersion\("([0-9]+\.[0-9]+\.[0-9]+)' | Select-Object -First 1
+    $versionMatch = Select-String -Path $infoPath -Pattern 'AssemblyVersion\("([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)' | Select-Object -First 1
     if ($versionMatch) { $Version = $versionMatch.Matches[0].Groups[1].Value }
 }
 if (-not $Version) { throw 'no AssemblyVersion found in src/AssemblyInfo.cs' }
@@ -251,8 +251,27 @@ Write-Step ("Ready: {0} (v{1}, {2:N0} MB)" -f $OutDir, $Version, $size)
 if ($Zip) {
     $zipPath = Join-Path $ScriptRoot ("build/dshview-client-$Version-win64.zip")
     Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
-    & tar.exe -a -c -f $zipPath -C $OutDir .
-    if ($LASTEXITCODE -ne 0) { throw "tar failed with exit code $LASTEXITCODE" }
+
+    # Every entry lives under one top-level folder so extracting never scatters.
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $rootFolder = "dshview-client-$Version"
+    $outPrefix = $OutDir.TrimEnd('\') + '\'
+    $archive = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        Get-ChildItem $OutDir -Recurse -File | ForEach-Object {
+            $rel = $_.FullName.Substring($outPrefix.Length).Replace('\', '/')
+            $entry = $archive.CreateEntry("$rootFolder/$rel", [System.IO.Compression.CompressionLevel]::Optimal)
+            $in = [System.IO.File]::Open($_.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
+            try {
+                $out = $entry.Open()
+                try { $in.CopyTo($out) } finally { $out.Dispose() }
+            }
+            finally { $in.Dispose() }
+        }
+    }
+    finally { $archive.Dispose() }
+
     Write-Step ("Zipped: {0} ({1:N0} MB)" -f $zipPath, ((Get-Item $zipPath).Length / 1MB))
 }
 
