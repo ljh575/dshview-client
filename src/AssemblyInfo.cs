@@ -6,5 +6,5 @@ using System.Reflection;
 // the FileDescription shown in Explorer's Properties dialog.
 [assembly: AssemblyTitle("DSHView")]
 [assembly: AssemblyProduct("DSHView")]
-[assembly: AssemblyVersion("1.2.1.2")]
-[assembly: AssemblyFileVersion("1.2.1.2")]
+[assembly: AssemblyVersion("1.2.1.3")]
+[assembly: AssemblyFileVersion("1.2.1.3")]

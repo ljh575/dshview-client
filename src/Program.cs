@@ -370,6 +370,7 @@ namespace DshView
         private PictureBox _titleIcon;
         private ChromeButton _btnMin, _btnMax, _btnClose;
         private bool _dark;
+        private DateTime _lastTitleClick = DateTime.MinValue;
 
         public MainForm(Settings settings)
         {
@@ -486,17 +487,19 @@ namespace DshView
             _btnMax.Click += delegate { ToggleMaximize(); };
             _btnClose.Click += delegate { Close(); };
 
-            MouseEventHandler drag = delegate(object sender, MouseEventArgs e)
+            // Drag to move the window; a fast second click (double-click) toggles
+            // maximize/restore instead of dragging again.
+            MouseEventHandler titleMouseDown = delegate(object sender, MouseEventArgs e)
             {
-                if (e.Button != MouseButtons.Left || WindowState == FormWindowState.Maximized) return;
-                WindowChrome.Drag(this);
+                if (e.Button != MouseButtons.Left) return;
+                bool isDouble = (DateTime.Now - _lastTitleClick).TotalMilliseconds < SystemInformation.DoubleClickTime;
+                _lastTitleClick = DateTime.Now;
+                if (isDouble) { ToggleMaximize(); return; }
+                if (WindowState != FormWindowState.Maximized) WindowChrome.Drag(this);
             };
-            _title.MouseDown += drag;
-            _titleText.MouseDown += drag;
-            _titleIcon.MouseDown += drag;
-            _title.DoubleClick += delegate { ToggleMaximize(); };
-            _titleText.DoubleClick += delegate { ToggleMaximize(); };
-            _titleIcon.DoubleClick += delegate { ToggleMaximize(); };
+            _title.MouseDown += titleMouseDown;
+            _titleText.MouseDown += titleMouseDown;
+            _titleIcon.MouseDown += titleMouseDown;
         }
 
         // Title bar whale icon: white whale on a dark page, dark whale on a light page.
@@ -1259,6 +1262,21 @@ namespace DshView
                 return;
             }
 
+            // A borderless window maximises over the whole screen including the task
+            // bar; clamp the maximized size/position to the working area instead.
+            if (m.Msg == 0x0024) // WM_GETMINMAXINFO
+            {
+                MINMAXINFO mmi = (MINMAXINFO)System.Runtime.InteropServices.Marshal.PtrToStructure(m.LParam, typeof(MINMAXINFO));
+                Rectangle wa = Screen.FromHandle(Handle).WorkingArea;
+                mmi.ptMaxPosition.X = wa.Left;
+                mmi.ptMaxPosition.Y = wa.Top;
+                mmi.ptMaxSize.X = wa.Width;
+                mmi.ptMaxSize.Y = wa.Height;
+                System.Runtime.InteropServices.Marshal.StructureToPtr(mmi, m.LParam, false);
+                m.Result = IntPtr.Zero;
+                return;
+            }
+
             // A borderless window has no resize edges; answer WM_NCHITTEST along a
             // thin border so the window still resizes like a normal one.
             if (m.Msg == 0x0084 && WindowState != FormWindowState.Maximized)
@@ -1280,6 +1298,19 @@ namespace DshView
             base.WndProc(ref m);
         }
 
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct POINT { public int X; public int Y; }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct MINMAXINFO
+        {
+            public POINT ptReserved;
+            public POINT ptMaxSize;
+            public POINT ptMaxPosition;
+            public POINT ptMinTrackSize;
+            public POINT ptMaxTrackSize;
+        }
+
         protected override void OnResize(EventArgs e)
         {
             base.OnResize(e);
@@ -1288,8 +1319,7 @@ namespace DshView
         }
     }
 
-    // Minimal window helpers for the borderless title bar: dragging via the caption
-    // technique. (Theme colours live on MainForm, not here.)
+    // Dragging the borderless title bar via the caption technique.
     internal static class WindowChrome
     {
         public static void Drag(Form form)
